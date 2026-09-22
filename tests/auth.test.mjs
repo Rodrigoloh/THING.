@@ -1,0 +1,84 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync, readdirSync } from "node:fs";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { readIdentity, toIdentity, startGoogle, sendEmailCode, verifyEmailCode, logout } from "../src/features/auth/auth.ts";
+import { AuthScreen } from "../src/features/auth/auth-screen.tsx";
+import { LocaleProvider } from "../src/lib/i18n/provider.tsx";
+import { readOwnProfile, submitOwnProfile } from "../src/features/profile/profile.ts";
+
+test("first visit reads the session without creating an account", async () => {
+  assert.equal(await readIdentity({ getSession: async () => ({ data: { session: null }, error: null }) }), null);
+});
+
+test("returning visits reuse the verified SDK account and project only safe fields", async () => {
+  const user = { id: "user-a", email: "test@example.com", app_metadata: { provider: "google" }, is_anonymous: false, access_token: "secret" };
+  const auth = { getSession: async () => ({ data: { session: { user } }, error: null }), getUser: async () => ({ data: { user }, error: null }) };
+  const first = await readIdentity(auth);
+  assert.deepEqual(first, { id: "user-a", email: "test@example.com", provider: "google" });
+  assert.deepEqual(await readIdentity(auth), first);
+  assert.equal(toIdentity({ ...user, is_anonymous: true }), null);
+  auth.getUser = async () => ({ data: { user: null }, error: { status: 401 } });
+  assert.equal(await readIdentity(auth), null);
+  auth.getUser = async () => ({ data: { user: null }, error: new Error("offline") });
+  await assert.rejects(readIdentity(auth), /offline/);
+});
+
+test("legacy guest identities cannot read or create a profile", async () => {
+  const client = { auth: { getUser: async () => ({ data: { user: { id: "old-user", is_anonymous: true } }, error: null }) }, from() { assert.fail("Database must not be accessed"); } };
+  assert.equal((await readOwnProfile(client)).error, "sessionRequired");
+  assert.equal((await submitOwnProfile(client, "Name", "en")).error, "sessionRequired");
+});
+
+test("Google uses official OAuth with the current localhost or deployed origin", async () => {
+  for (const origin of ["http://localhost:3000", "https://test-deployment.vercel.app"]) {
+    let request;
+    const auth = { signInWithOAuth: async (value) => { request = value; return { error: null }; } };
+    assert.equal(await startGoogle(auth, origin), null);
+    assert.deepEqual(request, { provider: "google", options: { redirectTo: origin + "/auth/callback" } });
+  }
+  assert.equal(await startGoogle({ signInWithOAuth: async () => ({ error: { message: "private" } }) }, "http://localhost:3000"), "authFailed");
+});
+
+test("email validation prevents requests and valid email starts passwordless account flow", async () => {
+  let calls = [];
+  const auth = { signInWithOtp: async (value) => { calls.push(value); return { error: null }; } };
+  for (const email of ["", "bad", "a@b", "a b@example.com"]) assert.equal(await sendEmailCode(auth, email), "emailInvalid");
+  assert.equal(calls.length, 0);
+  assert.equal(await sendEmailCode(auth, " test@example.com "), null);
+  assert.deepEqual(calls, [{ email: "test@example.com", options: { shouldCreateUser: true } }]);
+  assert.equal(await sendEmailCode({ signInWithOtp: async () => ({ error: { code: "over_email_send_rate_limit" } }) }, "test@example.com"), "authRateLimited");
+});
+
+test("OTP accepts only six digits, handles expiry and requires a verified session", async () => {
+  const auth = { verifyOtp: async (value) => { assert.deepEqual(value, { email: "test@example.com", token: "012345", type: "email" }); return { data: { user: { is_anonymous: false }, session: {} }, error: null }; } };
+  for (const code of ["", "12345", "1234567", "abcdef"]) assert.equal(await verifyEmailCode(auth, "test@example.com", code), "codeInvalid");
+  assert.equal(await verifyEmailCode(auth, "test@example.com", "012345"), null);
+  assert.equal(await verifyEmailCode({ verifyOtp: async () => ({ data: {}, error: { code: "otp_expired" } }) }, "test@example.com", "012345"), "codeInvalid");
+  assert.equal(await verifyEmailCode({ verifyOtp: async () => ({ data: { session: null }, error: null }) }, "test@example.com", "012345"), "authFailed");
+});
+
+test("logout clears this browser session before returning to root; errors do not redirect", async () => {
+  const calls = [];
+  assert.equal(await logout({ signOut: async (options) => { calls.push(options); return { error: null }; } }, (path) => calls.push(path)), null);
+  assert.deepEqual(calls, [{ scope: "local" }, "/"]);
+  assert.equal(await logout({ signOut: async () => ({ error: { message: "private" } }) }, () => assert.fail()), "authFailed");
+});
+
+test("auth entry renders English and Spanish with no theme or demo controls", () => {
+  for (const [locale, google, email] of [["en", "Continue with Google", "Email address"], ["es", "Continuar con Google", "Correo electrónico"]]) {
+    const html = renderToStaticMarkup(React.createElement(LocaleProvider, { initialLocale: locale }, React.createElement(AuthScreen)));
+    assert.ok(html.includes(google)); assert.ok(html.includes(email));
+    assert.match(html, /type="email"/); assert.match(html, /value="es"/);
+    assert.doesNotMatch(html, /anonymous|anónimo|Theme|Tema|password|demo/i);
+  }
+});
+
+test("production source has no automatic guest signup or guest-facing copy; dev is guarded", () => {
+  const files = readdirSync("src", { recursive: true }).filter((path) => /\.(ts|tsx)$/.test(path));
+  const source = files.map((path) => readFileSync("src/" + path, "utf8")).join("\n");
+  assert.doesNotMatch(source, /signInAnonymously|Anonymous Sign-Ins|identity-bootstrap/);
+  const dev = readFileSync("src/app/dev/page.tsx", "utf8");
+  assert.match(dev, /NODE_ENV !== "development"/); assert.match(dev, /notFound\(\)/);
+});

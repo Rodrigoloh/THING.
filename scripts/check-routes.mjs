@@ -1,0 +1,29 @@
+import assert from "node:assert/strict";
+
+const origin = process.env.CHECK_ORIGIN ?? "http://localhost:3000";
+const root = await fetch(origin + "/");
+assert.equal(root.status, 200);
+assert.match(await root.text(), /Continue with Google/);
+console.log("PASS / renders authentication");
+
+for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new"]) {
+  const response = await fetch(origin + path, { redirect: "manual" });
+  const body = await response.text();
+  // Next can encode a redirect in its streamed HTML after headers were sent.
+  const redirected = [303, 307, 308].includes(response.status) && response.headers.get("location") === "/";
+  const streamed = response.status === 200 && body.includes("NEXT_REDIRECT;replace;/;");
+  assert.ok(redirected || streamed, `${path} did not redirect to auth (${response.status})`);
+  assert.doesNotMatch(body, /<h1[^>]*>[^<]*(?:your things|make it yours|Account settings|Your Thing)/i);
+  console.log(`PASS ${path} requires authentication`);
+}
+
+for (const suffix of ["", "?error=access_denied&error_description=private-provider-details", "?next=https://example.com"]) {
+  const response = await fetch(origin + "/auth/callback" + suffix, { redirect: "manual" });
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), "/?auth_error=1");
+  assert.match(response.headers.get("cache-control"), /no-store/);
+}
+console.log("PASS OAuth callback safely handles missing/canceled code and ignores next");
+assert.equal((await fetch(origin + "/dev")).status, 404);
+assert.equal((await fetch(origin + "/avatars/blob_red.svg")).status, 200);
+console.log("PASS production /dev is unavailable; avatar assets remain available");

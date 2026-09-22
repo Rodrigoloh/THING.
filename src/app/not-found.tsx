@@ -1,6 +1,10 @@
+"use client";
+
 import { Screen } from "@/components/ui/screen";
 import { ActionLink } from "@/components/ui/action-link";
+import { useLocale } from "@/lib/i18n/provider";
 
 export default function NotFound() {
-  return <Screen title="Nothing here yet" description="This page could not be found."><ActionLink href="/things">Back to your Things</ActionLink></Screen>;
+  const { t } = useLocale();
+  return <Screen title={t.notFoundTitle} description={t.notFoundDescription}><ActionLink href="/things">{t.backThings}</ActionLink></Screen>;
 }
