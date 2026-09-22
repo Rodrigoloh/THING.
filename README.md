@@ -1,6 +1,6 @@
 # THING
 
-Mobile-first social game for two people per Thing. The current foundation provides Google / email-code authentication, a required profile, preset or uploaded avatars, English/Spanish UI, and an empty Things dashboard. Social features remain placeholders.
+Mobile-first social game for two people per Thing. The first screen leads with email-code authentication. The foundation also provides a required profile, preset or uploaded avatars, English/Spanish UI, and an empty Things dashboard. Social features remain placeholders.
 
 ## Setup
 
@@ -32,12 +32,12 @@ In Supabase Authentication > URL Configuration:
 
 | Setting | Value |
 | --- | --- |
-| Site URL | The actual production origin, `https://<your-production-domain>` |
+| Site URL | `https://thing-lake.vercel.app` |
 | Redirect URL for local development | `http://localhost:3000/auth/callback` |
-| Redirect URL for production | `https://<your-production-domain>/auth/callback` |
+| Redirect URL for production | `https://thing-lake.vercel.app/auth/callback` |
 | Optional preview/test URLs | Add each preview origin followed by `/auth/callback` if you test OAuth there |
 
-The production hostname was not found in repository metadata or environment variables. Replace the placeholders with the real Vercel/custom domain; do not paste placeholders into Supabase. If using another local port or `127.0.0.1`, allow that exact callback too. Until deployment is configured, Site URL can temporarily be `http://localhost:3000`.
+The current production origin is `https://thing-lake.vercel.app`. Use it as Site URL and add `https://thing-lake.vercel.app/auth/callback` to Redirect URLs before enabling Google. If using another local port or `127.0.0.1`, allow that exact callback too. The typed email-code flow calls `verifyOtp` on the same page; it does not use `/auth/callback` to verify a code.
 
 The browser supplies its actual origin to `signInWithOAuth`. The callback sends a fixed relative redirect, so it retains the public origin without trusting forwarded host headers or accepting a user-controlled `next` destination. See [redirect URL documentation](https://supabase.com/docs/guides/auth/redirect-urls).
 
@@ -61,7 +61,7 @@ Configure custom SMTP to send to actual users. Supabase's built-in sender is lim
 ## Architecture and flow
 
 ```text
-/ -> Google OAuth or email code -> verified Supabase account
+/ -> email code -> verified Supabase account
    -> profile lookup -> missing: /profile/create -> /things
                      -> exists: /things
 /profile/settings -> signOut (current browser) -> /
@@ -69,7 +69,7 @@ Configure custom SMTP to send to actual users. Supabase's built-in sender is lim
 
 - `src/lib/supabase/{env,client,server,proxy}.ts` retain environment validation, the SDK browser singleton, per-request server clients and cookie refresh. Only `@supabase/supabase-js` and `@supabase/ssr` were added; no deprecated auth helpers.
 - `src/features/auth/auth.ts` contains SDK-based session reading, Google/code operations, safe error mapping and logout. Opening the app creates no account. `identity-provider.tsx` subscribes to SDK events for presentation only; it neither persists credentials nor manages a second session store.
-- `src/features/auth/auth-screen.tsx` renders the localized entry/code form. Language survives the provider redirect in tab-local storage; a saved profile locale wins after login. Locale never changes theme.
+- `src/features/auth/auth-screen.tsx` renders the localized email/code form. Google code remains for later provider setup, but is hidden from the first screen while the provider is disabled. Language selection stays in tab-local storage; a saved profile locale wins after login. Locale never changes theme. Send failures, configuration failures, rate limits, and connection errors have distinct user-facing copy.
 - `src/app/auth/callback/route.ts` exchanges Google's PKCE code using the server client and writes the SDK session cookies. Success redirects to `/` for the verified profile gate; cancellation/invalid callback returns a safe localized error. No token or raw provider error is rendered.
 - `src/features/profile/{server,profile,actions}.ts` verify `getUser()` before reading/writing, reject legacy guest identities and derive the profile ID from Auth. Server route guards redirect signed-out users; the client gate handles auth events, profile loading/errors and navigation.
 - `src/app/profile/settings/page.tsx` and `src/features/auth/account-settings.tsx` provide minimal logout; the empty dashboard links to settings. No complete settings screen was added.
@@ -104,17 +104,17 @@ Run `supabase/tests/profiles_rls.sql`, `avatars_rls.sql`, and `account_access.sq
 
 No browser automation surface is connected in this environment. Complete these checks locally and on the actual Vercel deployment:
 
-1. Clear site data in a test browser. `/` shows Google, Email and EN/ES; `/things`, `/profile/create`, `/join`, and `/thing/test/chat` return to `/`. Merely opening `/` creates no Auth user.
+1. Clear site data in a test browser. `/` shows Email and EN/ES; `/things`, `/profile/create`, `/join`, and `/thing/test/chat` return to `/`. Merely opening `/` creates no Auth user.
 2. Toggle EN/ES; submit an invalid email. Request a code for an address you control. Enter a wrong/expired code: remain on the form with an error. Enter the valid six-digit code: reach `/profile/create` for a new account.
 3. Choose a name, preset avatar and language, submit, and reach empty `/things`. Refresh and reopen the browser: the same account/profile should remain while the Supabase session is valid.
 4. Use Account settings > Sign out. Verify return to `/`, then try a protected URL and browser Back. Sign back into the same account: skip profile creation and retain name/avatar/locale.
-5. In an independent browser, continue with Google. Check consent and the callback on localhost and production. New account goes to profile creation; existing account goes to `/things`. Cancel consent and test `/auth/callback` without a code: return to auth with a safe error.
+5. After Google is enabled and restored to the entry screen, check consent and the callback on localhost and production. New account goes to profile creation; existing account goes to `/things`. Cancel consent and test `/auth/callback` without a code: return to auth with a safe error.
 6. Test a second distinct account with a photo upload. Refresh and confirm the photo loads. Check JPEG/PNG/WebP, rejection of GIF/invalid bytes/over-5-MiB files, preset/photo switching before submit, and initials fallback. Signing into the same account in two browsers should yield the SAME ID; distinct accounts yield different IDs.
 7. Run the SQL policy tests in a development project, including cross-user replacement/deletion denial. Hosted upload/download behavior still requires this live acceptance run.
 8. Confirm all existing placeholders remain accessible after profile creation, `/dev` is 404 in production, and no normal screen shows theme/developer controls. In development, `/dev` should show only safe account/profile information.
 
 ## Current verification status
 
-Local tests (26), TypeScript, lint, production build, unauthenticated HTTP route checks and SQL policy checks pass. The project owner reports completing Supabase configuration. The latest read-only probe still reports Google disabled and Email enabled; the profiles endpoint now returns HTTP 401 to an unauthenticated request, rather than the earlier missing-table response. Authenticated profile access, email templates, SMTP delivery and Google credentials still require end-to-end verification.
+The local public environment values match the intended Supabase project and have a valid publishable-key shape. The public Auth settings endpoint reports Email enabled and Google disabled. A production OTP request for an address controlled by the project owner returned HTTP 500, `Error sending confirmation email`; no email arrived. This is a Supabase email-delivery/SMTP failure, before `verifyOtp` or session creation. Check Supabase Authentication logs and the SMTP provider's delivery logs, sender verification, and current SMTP credential. After fixing delivery, request a fresh code and complete the profile/session flow. The Vercel dashboard environment values and Supabase email template contents still require dashboard access to verify directly.
 
 No emails or Auth users were created during automated verification. Use the manual steps above to verify the deployed application after provider configuration. The local environment file remains excluded from Git.

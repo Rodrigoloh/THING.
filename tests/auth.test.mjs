@@ -49,6 +49,8 @@ test("email validation prevents requests and valid email starts passwordless acc
   assert.equal(await sendEmailCode(auth, " test@example.com "), null);
   assert.deepEqual(calls, [{ email: "test@example.com", options: { shouldCreateUser: true } }]);
   assert.equal(await sendEmailCode({ signInWithOtp: async () => ({ error: { code: "over_email_send_rate_limit" } }) }, "test@example.com"), "authRateLimited");
+  assert.equal(await sendEmailCode({ signInWithOtp: async () => ({ error: { code: "email_provider_disabled" } }) }, "test@example.com"), "authNotConfigured");
+  assert.equal(await sendEmailCode({ signInWithOtp: async () => ({ error: { code: "unexpected_failure" } }) }, "test@example.com"), "emailSendFailed");
 });
 
 test("OTP accepts only six digits, handles expiry and requires a verified session", async () => {
@@ -66,12 +68,12 @@ test("logout clears this browser session before returning to root; errors do not
   assert.equal(await logout({ signOut: async () => ({ error: { message: "private" } }) }, () => assert.fail()), "authFailed");
 });
 
-test("auth entry renders English and Spanish with no theme or demo controls", () => {
-  for (const [locale, google, email] of [["en", "Continue with Google", "Email address"], ["es", "Continuar con Google", "Correo electrónico"]]) {
+test("auth entry makes email primary and keeps the first screen focused", () => {
+  for (const [locale, action, email] of [["en", "Send me a code", "Email address"], ["es", "Enviarme un código", "Correo electrónico"]]) {
     const html = renderToStaticMarkup(React.createElement(LocaleProvider, { initialLocale: locale }, React.createElement(AuthScreen)));
-    assert.ok(html.includes(google)); assert.ok(html.includes(email));
-    assert.match(html, /type="email"/); assert.match(html, /value="es"/);
-    assert.doesNotMatch(html, /anonymous|anónimo|Theme|Tema|password|demo/i);
+    assert.ok(html.includes(action)); assert.ok(html.includes(email));
+    assert.match(html, /type="email"/); assert.match(html, /aria-pressed="true"/);
+    assert.doesNotMatch(html, /Google|anonymous|anónimo|Theme|Tema|password|demo/i);
   }
 });
 

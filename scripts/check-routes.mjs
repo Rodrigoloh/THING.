@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 const origin = process.env.CHECK_ORIGIN ?? "http://localhost:3000";
 const root = await fetch(origin + "/");
 assert.equal(root.status, 200);
-assert.match(await root.text(), /Continue with Google/);
+const entry = await root.text();
+assert.match(entry, /Send me a code/);
+assert.doesNotMatch(entry, /Continue with Google/);
 console.log("PASS / renders authentication");
 
 for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new"]) {

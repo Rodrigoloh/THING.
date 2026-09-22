@@ -2,7 +2,7 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type Identity = { id: string; provider: string; email: string | null };
 type Auth = SupabaseClient["auth"];
-export type AuthErrorKey = "authFailed" | "authRateLimited" | "emailInvalid" | "codeInvalid";
+export type AuthErrorKey = "authFailed" | "authRateLimited" | "emailInvalid" | "codeInvalid" | "emailSendFailed" | "authNotConfigured" | "connectionFailed";
 
 export function toIdentity(user: User): Identity | null {
   if (user.is_anonymous) return null;
@@ -28,6 +28,14 @@ export function identityErrorKey(error: unknown): AuthErrorKey {
   return "authFailed";
 }
 
+export function emailSendErrorKey(error: unknown): AuthErrorKey {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+  if (code === "over_request_rate_limit" || code === "over_email_send_rate_limit" || code === "over_ip_request_rate_limit") return "authRateLimited";
+  if (code === "email_address_invalid" || code === "validation_failed") return "emailInvalid";
+  if (code === "email_provider_disabled" || code === "signup_disabled" || code === "invalid_api_key") return "authNotConfigured";
+  return "emailSendFailed";
+}
+
 export function validEmail(value: string) {
   return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -41,7 +49,7 @@ export async function sendEmailCode(auth: Pick<Auth, "signInWithOtp">, input: st
   const email = input.trim();
   if (!validEmail(email)) return "emailInvalid";
   const { error } = await auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-  return error ? identityErrorKey(error) : null;
+  return error ? emailSendErrorKey(error) : null;
 }
 
 export async function verifyEmailCode(auth: Pick<Auth, "verifyOtp">, email: string, input: string): Promise<AuthErrorKey | null> {
