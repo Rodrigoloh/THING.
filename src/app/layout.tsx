@@ -18,7 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <LocaleProvider>
           <div className="mx-auto w-full max-w-lg px-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
             <AppHeader />
-            <main id="main" className="pt-8 pb-8">
+            <main id="main" className="pb-8">
               <IdentityProvider>
                 <ProfileProvider><ProfileGate>{children}</ProfileGate></ProfileProvider>
               </IdentityProvider>

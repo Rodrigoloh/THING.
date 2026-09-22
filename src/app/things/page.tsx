@@ -1,6 +1,6 @@
-import { EmptyThings } from "@/features/things/empty-things";
+import { ThingsScreen } from '@/features/things/screens';
+import { loadThings } from '@/features/things/actions';
 
-export default function ThingsPage() {
-  // No Things persistence exists yet. Never substitute development fixtures.
-  return <EmptyThings />;
+export default async function ThingsPage() {
+  return <ThingsScreen result={await loadThings()} />;
 }

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 const origin = process.env.CHECK_ORIGIN ?? "http://localhost:3000";
 const root = await fetch(origin + "/");
 assert.equal(root.status, 200);
-assert.match(await root.text(), /Continue with Google/);
+const entry = await root.text();
+assert.match(entry, /Send me a code/);
+assert.doesNotMatch(entry, /Continue with Google/);
 console.log("PASS / renders authentication");
 
 for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new"]) {
@@ -24,6 +26,13 @@ for (const suffix of ["", "?error=access_denied&error_description=private-provid
   assert.match(response.headers.get("cache-control"), /no-store/);
 }
 console.log("PASS OAuth callback safely handles missing/canceled code and ignores next");
+const inviteCode = 'ABCDEF0123456789ABCDEF0123456789';
+const inviteResponse = await fetch(origin + '/join/' + inviteCode, { redirect: 'manual' });
+assert.match(inviteResponse.headers.get('set-cookie') ?? '', new RegExp(`thing-pending-invite=${inviteCode}`));
+assert.equal(inviteResponse.headers.get('referrer-policy'), 'no-referrer');
+const prefetched = await fetch(origin + '/join/' + inviteCode + '?_rsc=prefetch', { redirect: 'manual', headers: { 'next-router-prefetch': '1', purpose: 'prefetch' } });
+assert.doesNotMatch(prefetched.headers.get('set-cookie') ?? '', /thing-pending-invite/);
+console.log('PASS invite survives auth redirect; prefetch does not replace continuation');
 assert.equal((await fetch(origin + "/dev")).status, 404);
 assert.equal((await fetch(origin + "/avatars/blob_red.svg")).status, 200);
 console.log("PASS production /dev is unavailable; avatar assets remain available");

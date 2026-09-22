@@ -6,6 +6,7 @@ import { useIdentity } from "@/features/auth/identity-provider";
 import { useLocale } from "@/lib/i18n/provider";
 import { useProfile } from "./profile-provider";
 import { profileDestination } from "./profile";
+import { browserInviteDestination } from '@/features/things/model';
 
 export function ProfileGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,7 +15,7 @@ export function ProfileGate({ children }: { children: React.ReactNode }) {
   const { state, retry } = useProfile();
   const { t } = useLocale();
   const destination = auth.status === "signedOut" && pathname !== "/" && pathname !== "/dev" ? "/" : state.status === "ready" ? profileDestination(pathname, !!state.profile) : null;
-  useEffect(() => { if (destination) router.replace(destination); }, [destination, router]);
+  useEffect(() => { if (destination) router.replace(destination === '/things' ? browserInviteDestination() ?? destination : destination); }, [destination, router]);
 
   if (pathname === "/dev") return children;
   if (pathname === "/" && auth.status !== "active") return children;

@@ -8,15 +8,17 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --import ./tests/register-tsx.mjs --test tests/*.test.mjs"
+    "test": "node --import ./tests/register-tsx.mjs --test --test-force-exit tests/*.test.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.5",
+    "pg": "^8.23.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   },

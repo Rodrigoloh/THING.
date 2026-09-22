@@ -10,6 +10,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "next/link") return nextResolve("next/link.js", context);
+    if (specifier === "next/navigation") return nextResolve("next/navigation.js", context);
     let candidate;
     if (specifier.startsWith("@/")) candidate = resolvePath(root, "src", specifier.slice(2));
     else if (specifier.startsWith(".") && context.parentURL?.startsWith(pathToFileURL(resolvePath(root, "src")).href)) {
