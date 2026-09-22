@@ -9,7 +9,7 @@ Requires Node.js 20.9+ for Next.js; use Node.js 22.15+ or 24+ for the test modul
 1. `npm install`.
 2. Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` using Supabase Connect. The supplied project API URL is `https://waziecvsylrcovrqavco.supabase.co`. The public key is already saved locally in the ignored `.env.local`.
 3. Configure providers, email templates and redirect URLs below.
-4. Apply `supabase/migrations/20260922000100_create_profiles.sql` once in the project's SQL Editor after checking the destination. It creates only profiles, avatar storage, constraints, grants, triggers and policies. No signup trigger creates profiles automatically. The migration intentionally fails on conflicting existing objects.
+4. Apply the files in `supabase/migrations/` in timestamp order through the project's SQL Editor or established migration workflow. The first creates profiles/avatar storage; the second creates the Things relational foundation. Migrations intentionally fail on conflicting existing objects.
 5. `npm run dev`, then open `http://localhost:3000`.
 
 On PowerShell use `npm.cmd` if `npm.ps1` is blocked. Set the same two public variables in Vercel's relevant environments and redeploy; Next.js embeds public values at build time. No Google client secret or Supabase service key belongs in the app environment. Missing/invalid environment values fail clearly without echoing values. `.env.local` remains ignored.
@@ -77,6 +77,12 @@ Configure custom SMTP to send to actual users. Supabase's built-in sender is lim
 
 Existing `/things`, `/things/new`, `/join`, `/join/[code]` and `/thing/[thingId]` area routes remain in place and protected. The dashboard has no sample data. Theme defaults to system, with existing light/dark preference persistence; its selector only appears in `/dev`.
 
+## Things data foundation
+
+`20260922000200_create_things.sql` adds `things`, `thing_members`, and `thing_invites`. It defines UUID keys, Auth foreign keys, lifecycle checks, indexes, a single creator per Thing, and a concurrency-safe maximum of two memberships. A pending Thing has no activation timestamp; active or disconnected Things retain one. Invite codes are unique uppercase alphanumeric values of 6-32 characters, and their expiry must follow creation.
+
+RLS allows verified accounts to see only Things where they are active members (or the creator during initial setup). Only the creator can create and configure a Thing or manage its invites. A client can insert only its own initial active creator membership; the future invite-acceptance operation must add the second member transactionally. Invite codes are not publicly searchable, and no invitation redemption/UI behavior is implemented yet.
+
 ## Profiles and avatars
 
 `profiles.id` references `auth.users.id`. A profile requires explicit submission of a trimmed 1-50-character display name and `en`/`es` locale. Avatars can be one of eight bundled SVG presets, initials, or JPEG/PNG/WebP up to 5 MiB. Upload happens only after form submission. Switching back to a preset before submitting does not upload the discarded photo.
@@ -98,7 +104,7 @@ node scripts/check-routes.mjs
 
 `CHECK_ORIGIN` can point the route check to another local test port. It performs only unauthenticated HTTP reads. Auth tests mock SDK boundaries: Google redirect configuration, email/code validation and failure paths, session reuse, safe identity projection, legacy guest rejection, logout, EN/ES auth UI and absence of guest signup/demo copy. Existing profile, avatar, locale, empty-dashboard and environment tests remain.
 
-Run `supabase/tests/profiles_rls.sql`, `avatars_rls.sql`, and `account_access.sql` in a development SQL Editor after the migration. Each rolls back fixtures. They test ownership, cross-user denial, column grants, guest-account denial, and avatar consistency. All three also passed in isolated in-memory PostgreSQL (PGlite with Auth/Storage metadata shims); that does not substitute for hosted Storage API verification.
+Run `supabase/tests/profiles_rls.sql`, `avatars_rls.sql`, `account_access.sql`, and `things_rls.sql` in a development SQL Editor after the migrations. Each rolls back fixtures. They test ownership, cross-user denial, column grants, guest-account denial, avatar consistency, two-member enforcement, invitation visibility, and creator-only mutations. The SQL suite can also run against isolated PostgreSQL with Auth/Storage metadata shims; that does not substitute for hosted API verification.
 
 ### Manual end-to-end verification after configuration
 
