@@ -55,7 +55,7 @@ export async function sendEmailCode(auth: Pick<Auth, "signInWithOtp">, input: st
 export async function verifyEmailCode(auth: Pick<Auth, "verifyOtp">, email: string, input: string): Promise<AuthErrorKey | null> {
   if (!validEmail(email.trim())) return "emailInvalid";
   const token = input.trim();
-  if (!/^\d{6}$/.test(token)) return "codeInvalid";
+  if (!/^\d{6,10}$/.test(token)) return "codeInvalid";
   const { data, error } = await auth.verifyOtp({ email: email.trim(), token, type: "email" });
   if (error) return error.code === "otp_expired" ? "codeInvalid" : identityErrorKey(error);
   return data.session && data.user && !data.user.is_anonymous ? null : "authFailed";
