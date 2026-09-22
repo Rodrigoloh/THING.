@@ -53,10 +53,10 @@ test("email validation prevents requests and valid email starts passwordless acc
   assert.equal(await sendEmailCode({ signInWithOtp: async () => ({ error: { code: "unexpected_failure" } }) }, "test@example.com"), "emailSendFailed");
 });
 
-test("OTP accepts only six digits, handles expiry and requires a verified session", async () => {
-  const auth = { verifyOtp: async (value) => { assert.deepEqual(value, { email: "test@example.com", token: "012345", type: "email" }); return { data: { user: { is_anonymous: false }, session: {} }, error: null }; } };
-  for (const code of ["", "12345", "1234567", "abcdef"]) assert.equal(await verifyEmailCode(auth, "test@example.com", code), "codeInvalid");
-  assert.equal(await verifyEmailCode(auth, "test@example.com", "012345"), null);
+test("OTP accepts Supabase's configurable 6–10 digits, handles expiry and requires a verified session", async () => {
+  const auth = { verifyOtp: async (value) => { assert.equal(value.email, "test@example.com"); assert.equal(value.type, "email"); assert.match(value.token, /^\d{6,10}$/); return { data: { user: { is_anonymous: false }, session: {} }, error: null }; } };
+  for (const code of ["", "12345", "12345678901", "abcdef"]) assert.equal(await verifyEmailCode(auth, "test@example.com", code), "codeInvalid");
+  for (const code of ["012345", "01234567", "0123456789"]) assert.equal(await verifyEmailCode(auth, "test@example.com", code), null);
   assert.equal(await verifyEmailCode({ verifyOtp: async () => ({ data: {}, error: { code: "otp_expired" } }) }, "test@example.com", "012345"), "codeInvalid");
   assert.equal(await verifyEmailCode({ verifyOtp: async () => ({ data: { session: null }, error: null }) }, "test@example.com", "012345"), "authFailed");
 });
