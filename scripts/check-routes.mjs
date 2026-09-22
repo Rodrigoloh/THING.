@@ -4,11 +4,12 @@ const origin = process.env.CHECK_ORIGIN ?? "http://localhost:3000";
 const root = await fetch(origin + "/");
 assert.equal(root.status, 200);
 const entry = await root.text();
-assert.match(entry, /Send me a code/);
+assert.match(entry, /Sign in/);
+assert.match(entry, /Use a code instead/);
 assert.doesNotMatch(entry, /Continue with Google/);
 console.log("PASS / renders authentication");
 
-for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new"]) {
+for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/auth/update-password", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new"]) {
   const response = await fetch(origin + path, { redirect: "manual" });
   const body = await response.text();
   // Next can encode a redirect in its streamed HTML after headers were sent.

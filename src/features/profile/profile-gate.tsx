@@ -19,7 +19,7 @@ export function ProfileGate({ children }: { children: React.ReactNode }) {
 
   if (pathname === "/dev") return children;
   if (pathname === "/" && auth.status !== "active") return children;
-  if (pathname === "/profile/settings" && auth.status === "active") return children;
+  if ((pathname === "/profile/settings" || pathname === "/auth/update-password") && auth.status === "active") return children;
   if (auth.status === "error") return null; // The auth provider owns its retry UI.
   if (state.status === "error") return (
     <div role="alert" className="space-y-4 rounded-[20px] border border-border bg-surface p-6">

@@ -12,7 +12,7 @@ import { flowCopy } from '../src/features/things/copy.ts';
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier === './actions' && context.parentURL?.endsWith('/features/things/screens.tsx')) {
-      const source = ['acceptInvite', 'chooseCharm', 'forgetInvite', 'manageInvite', 'startThing'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
+      const source = ['acceptCharm', 'acceptInvite', 'forgetInvite', 'manageInvite', 'proposeCharm', 'startThing'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
       return { url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true };
     }
     return next(specifier, context);
@@ -22,7 +22,7 @@ const { ThingsScreen, ThingScreen, JoinScreen, StartScreen } = await import('../
 function render(component, props, locale = 'en') {
   return renderToStaticMarkup(h(AppRouterContext.Provider, { value: { refresh() {}, replace() {} } }, h(LocaleProvider, { initialLocale: locale }, h(component, props))));
 }
-const pending = { id: 'test-thing', status: 'pending_invite', charm_key: null, round: 1, created_by: 'creator', members: [{ user_id: 'creator', display_name: 'Test Creator' }], own_choice: null, partner_ready: false, invite: { code: 'ABC123', expires_at: '2030-01-01T00:00:00Z', expired: false } };
+const pending = { id: 'test-thing', status: 'pending_invite', charm_key: null, created_by: 'creator', viewer_id: 'creator', members: [{ user_id: 'creator', display_name: 'Test Creator' }], proposal: null, invite: { code: 'ABC123', expires_at: '2030-01-01T00:00:00Z', expired: false } };
 const joined = { ...pending, status: 'pending_charm', invite: null, members: [...pending.members, { user_id: 'partner', display_name: 'Test Partner' }] };
 
 test('real list renders empty, pending invitation, pending Charm and active states', () => {
@@ -42,18 +42,31 @@ test('inviter preview requires an explicit accept button and start does not crea
   assert.match(render(StartScreen, {}), /create invite →/);
   assert.match(render(JoinScreen, {}), /invite code or link/);
 });
-test('Charm agreement renders waiting, mismatch reset and actual shared Charm and names', () => {
-  const waiting = render(ThingScreen, { result: { ok: true, data: { ...joined, own_choice: 'moon' } } });
-  assert.match(waiting, /Your choice is saved/);
+test('Charm proposal renders proposer, correct controls, waiting and final shared Charm', () => {
+  const proposal = { charm_key: 'moon', proposed_by: 'creator', proposer_name: 'Test Creator', version: 1 };
+  const waiting = render(ThingScreen, { result: { ok: true, data: { ...joined, proposal } } });
+  assert.match(waiting, /you proposed this Charm/i);
+  assert.match(waiting, /waiting for them/i);
   assert.doesNotMatch(waiting, /type="radio"/);
-  const retry = render(ThingScreen, { result: { ok: true, data: { ...joined, round: 2 } } });
-  assert.match(retry, /Different choices last round/);
-  assert.equal((retry.match(/type="radio"/g) ?? []).length, 4);
-  assert.match(retry, /disabled=""[^>]*>confirm choice/);
+  const partner = render(ThingScreen, { result: { ok: true, data: { ...joined, viewer_id: 'partner', proposal } } });
+  assert.match(partner, /Test Creator chose this Charm/);
+  assert.match(partner, /keep it/);
+  assert.match(partner, /pick another/);
+  assert.doesNotMatch(partner, /wrong|mismatch|try again/i);
+  const first = render(ThingScreen, { result: { ok: true, data: joined } });
+  assert.equal((first.match(/type="radio"/g) ?? []).length, 4);
+  assert.match(first, /disabled=""[^>]*>propose this Charm/);
   const home = render(ThingScreen, { result: { ok: true, data: { ...joined, status: 'active', charm_key: 'clover' } } });
   assert.match(home, /Test Creator \+ Test Partner/);
   assert.match(home, /🍀/);
   assert.doesNotMatch(home, /type="radio"|share invite/);
+});
+test('invite screen reserves a mobile QR and shows the six-character code with sharing controls', () => {
+  const html = render(ThingScreen, { result: { ok: true, data: pending } });
+  assert.match(html, /QR code for this invite/);
+  assert.match(html, /ABC123/);
+  assert.match(html, /copy code/);
+  assert.match(html, /share invite/);
 });
 test('invite failure states have distinct actionable copy in both languages', () => {
   for (const locale of ['en', 'es']) {

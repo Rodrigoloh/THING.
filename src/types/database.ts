@@ -9,7 +9,7 @@ export type Profile = {
   locale: "en" | "es";
 };
 
-import type { ThingSnapshot, InvitePreview } from '@/features/things/model';
+import type { ThingSnapshot, InvitePreview, InviteRpcResult } from '@/features/things/model';
 export type ThingStatus = "pending_invite" | "pending_charm" | "active" | "disconnected";
 export type ThingMemberRole = "creator" | "member";
 export type ThingMemberStatus = "pending" | "active" | "left";
@@ -79,13 +79,29 @@ export type Database = {
         Update: { charm_key?: string };
         Relationships: [];
       };
+      current_charm_proposals: {
+        Row: { thing_id: string; charm_key: string; proposed_by: string; proposal_version: number; updated_at: string };
+        Insert: { thing_id: string; charm_key: string; proposed_by: string; proposal_version: number; updated_at?: string };
+        Update: { charm_key?: string; proposed_by?: string; proposal_version?: number; updated_at?: string };
+        Relationships: [];
+      };
+      thing_invite_attempts: {
+        Row: { user_id: string; window_started: string; attempts: number };
+        Insert: { user_id: string; window_started: string; attempts: number };
+        Update: { window_started?: string; attempts?: number };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
       create_thing: { Args: { p_request_id: string }; Returns: string };
       preview_thing_invite: { Args: { p_code: string }; Returns: InvitePreview };
       accept_thing_invite: { Args: { p_code: string }; Returns: string };
+      preview_thing_invite_v2: { Args: { p_code: string }; Returns: InviteRpcResult<InvitePreview> };
+      accept_thing_invite_v2: { Args: { p_code: string }; Returns: InviteRpcResult<string> };
       choose_thing_charm: { Args: { p_thing_id: string; p_round: number; p_charm: string }; Returns: undefined };
+      propose_thing_charm: { Args: { p_thing_id: string; p_expected_version: number; p_charm: string }; Returns: number };
+      accept_thing_charm: { Args: { p_thing_id: string; p_expected_version: number }; Returns: undefined };
       thing_snapshot: { Args: { p_thing_id: string }; Returns: ThingSnapshot };
       list_my_things: { Args: Record<string, never>; Returns: ThingSnapshot[] };
       renew_thing_invite: { Args: { p_thing_id: string }; Returns: undefined };

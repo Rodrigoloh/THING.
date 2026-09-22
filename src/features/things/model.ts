@@ -4,14 +4,14 @@ export type ThingSnapshot = {
   id: string;
   status: 'pending_invite' | 'pending_charm' | 'active' | 'disconnected';
   charm_key: Charm | null;
-  round: number;
   created_by: string;
+  viewer_id: string;
   members: { user_id: string; display_name: string }[];
-  own_choice: Charm | null;
-  partner_ready: boolean;
+  proposal: { charm_key: Charm; proposed_by: string; proposer_name: string; version: number } | null;
   invite: { code: string; expires_at: string; expired: boolean } | null;
 };
 export type InvitePreview = { inviter_name: string; expires_at: string };
+export type InviteRpcResult<T> = { ok: true; data: T } | { ok: false; error: FlowError };
 export const inviteCookie = 'thing-pending-invite';
 export function normalizeInvite(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -40,10 +40,17 @@ export function browserInviteDestination() {
   const code = document.cookie.split('; ').find((part) => part.startsWith(`${inviteCookie}=`))?.slice(inviteCookie.length + 1);
   return inviteDestination(code);
 }
-export const flowErrors = ['session_required', 'profile_required', 'invite_unavailable', 'invite_expired', 'invite_used', 'invite_revoked', 'thing_full', 'own_invite', 'thing_unavailable', 'round_changed', 'invalid_charm', 'already_chosen', 'too_many_pending', 'connection_failed'] as const;
+export const flowErrors = ['session_required', 'profile_required', 'invite_unavailable', 'invite_expired', 'invite_used', 'invite_revoked', 'invite_rate_limited', 'thing_full', 'own_invite', 'thing_unavailable', 'proposal_changed', 'own_proposal', 'invalid_charm', 'too_many_pending', 'connection_failed'] as const;
 export type FlowError = typeof flowErrors[number];
 export function flowError(error: unknown): FlowError {
   const message = error && typeof error === 'object' && 'message' in error ? error.message : '';
   return flowErrors.find((key) => key === message) ?? 'connection_failed';
 }
 export type Result<T> = { ok: true; data: T } | { ok: false; error: FlowError };
+
+export function inviteRpcResult<T>(value: unknown): Result<T> {
+  if (!value || typeof value !== 'object' || !('ok' in value)) return { ok: false, error: 'connection_failed' };
+  const result = value as { ok: unknown; data?: T; error?: unknown };
+  if (result.ok === true && 'data' in result) return { ok: true, data: result.data as T };
+  return { ok: false, error: flowErrors.includes(result.error as FlowError) ? result.error as FlowError : 'connection_failed' };
+}

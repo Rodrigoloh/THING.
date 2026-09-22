@@ -23,7 +23,7 @@ export function validateProfileInput(name: unknown, locale: unknown):
 }
 
 export function profileDestination(pathname: string, hasProfile: boolean): string | null {
-  if (pathname === "/dev" || pathname === "/profile/settings") return null;
+  if (pathname === "/dev" || pathname === "/profile/settings" || pathname === "/auth/update-password") return null;
   if (!hasProfile) return pathname === "/profile/create" ? null : "/profile/create";
   return pathname === "/" || pathname === "/profile/create" ? "/things" : null;
 }

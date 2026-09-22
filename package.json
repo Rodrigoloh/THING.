@@ -8,11 +8,12 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --import ./tests/register-tsx.mjs --test --test-force-exit tests/*.test.mjs"
+    "test": "node --import ./tests/register-tsx.mjs --test --test-concurrency=1 --test-force-exit tests/*.test.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.2",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "embedded-postgres": "^18.4.0-beta.17",
@@ -26,6 +27,7 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "next": "^16.3.5",
+    "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   }

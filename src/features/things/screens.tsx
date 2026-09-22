@@ -8,8 +8,10 @@ import { ActionLink } from '@/components/ui/action-link';
 import { useLocale } from '@/lib/i18n/provider';
 import { EmptyThings } from './empty-things';
 import { flowCopy } from './copy';
-import { acceptInvite, chooseCharm, forgetInvite, manageInvite, startThing } from './actions';
+import { acceptCharm, acceptInvite, forgetInvite, manageInvite, proposeCharm, startThing } from './actions';
 import { charms, parseInviteInput, type Charm, type FlowError, type InvitePreview, type Result, type ThingSnapshot } from './model';
+import { buildInviteUrl } from './invite-url';
+import { InviteQr } from './invite-qr';
 
 const button = 'min-h-14 w-full rounded-[18px] bg-accent px-5 py-4 font-semibold text-[#171717] disabled:opacity-50';
 const secondary = 'min-h-12 rounded-[18px] border border-border px-5 py-3 disabled:opacity-50';
@@ -138,7 +140,7 @@ function InvitePanel({ thing }: { thing: ThingSnapshot }) {
   const invite = thing.invite;
   useEffect(() => {
     if (invite) {
-      const url = new URL(`/join/${invite.code}`, window.location.origin).href;
+      const url = buildInviteUrl(window.location.origin, invite.code) ?? '';
       // Browser origin is needed only for the shareable absolute URL.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLink(url);
@@ -167,9 +169,10 @@ function InvitePanel({ thing }: { thing: ThingSnapshot }) {
   }
   return <div className={panel}>
     {invite && !invite.expired ? <>
-      <button className={button} disabled={!link} onClick={() => void share('share')}>{c.share}</button>
-      <p className="text-sm text-muted">{c.code}</p><p className="break-all font-mono text-lg tracking-wider">{invite.code}</p>
+      <InviteQr url={link} label={c.qrLabel} />
+      <p className="text-center font-mono text-3xl font-bold tracking-[.22em]">{invite.code}</p>
       <div className="flex flex-wrap gap-2"><button className={secondary} onClick={() => void share('code')}>{c.copyCode}</button><button className={secondary} disabled={!link} onClick={() => void share('link')}>{c.copyLink}</button></div>
+      <button className={button} disabled={!link} onClick={() => void share('share')}>{c.share}</button>
       <input aria-label={c.copyLink} className="w-full min-w-0 text-sm text-muted" readOnly value={link} onFocus={(event) => event.target.select()} />
       <p className="text-sm text-muted">{c.expires}: {new Date(invite.expires_at).toLocaleString(locale)}</p>
     </> : <><p>{c.expired}</p><button className={button} disabled={pending} onClick={() => manage('renew')}>{c.renew}</button></>}
@@ -182,27 +185,51 @@ function CharmPanel({ thing }: { thing: ThingSnapshot }) {
   const c = useCopy();
   const router = useRouter();
   const [selected, setSelected] = useState<Charm | null>(null);
+  const [choosing, setChoosing] = useState(!thing.proposal);
   const [pending, transition] = useTransition();
   const [error, setError] = useState<FlowError | null>(null);
+  const ownProposal = thing.proposal?.proposed_by === thing.viewer_id;
+  const version = thing.proposal?.version ?? 0;
+  function submitProposal() {
+    if (!selected) return;
+    transition(async () => {
+      setError(null);
+      try {
+        const result = await proposeCharm(thing.id, version, selected);
+        if (!result.ok) setError(result.error);
+        router.refresh();
+      } catch { setError('connection_failed'); }
+    });
+  }
+  function keepProposal() {
+    if (!thing.proposal) return;
+    transition(async () => {
+      setError(null);
+      try {
+        const result = await acceptCharm(thing.id, thing.proposal!.version);
+        if (!result.ok) setError(result.error);
+        router.refresh();
+      } catch { setError('connection_failed'); }
+    });
+  }
   return <div className={panel}>
-    <p className="text-sm text-muted">{c.round} {thing.round}</p>
-    {thing.round > 1 && <p role="status">{c.mismatch}</p>}
-    {thing.own_choice ? <><p className="text-5xl" aria-label={c[thing.own_choice]}>{charms[thing.own_choice]}</p><p role="status">{c.waiting}</p></> : <>
-      <p>{c.pick}</p>{thing.partner_ready && <p role="status">{c.partnerReady}</p>}
+    {thing.proposal && !choosing ? <div className="space-y-5 text-center">
+      <p className="text-sm text-muted">{ownProposal ? c.youProposed : c.personProposed.replace('{name}', thing.proposal.proposer_name)}</p>
+      <p className="text-7xl" aria-label={c[thing.proposal.charm_key]}>{charms[thing.proposal.charm_key]}</p>
+      {ownProposal ? <p role="status">{c.waiting}</p> : <>
+        <p>{c.keepQuestion}</p>
+        <button className={button} disabled={pending} onClick={keepProposal}>{pending ? c.busy : c.keepCharm}</button>
+        <button className={`${secondary} w-full`} disabled={pending} onClick={() => setChoosing(true)}>{c.pickAnother}</button>
+      </>}
+    </div> : <>
+      <p>{thing.proposal ? c.pickAnother : c.pick}</p>
       <fieldset disabled={pending} className="grid grid-cols-2 gap-3"><legend className="sr-only">Charm</legend>
         {(Object.entries(charms) as [Charm, string][]).map(([key, emoji]) => <label key={key} className={`cursor-pointer rounded-2xl border p-4 text-center ${selected === key ? 'border-foreground bg-background' : 'border-border'}`}>
           <input type="radio" name="charm" value={key} checked={selected === key} onChange={() => setSelected(key)} className="mr-2" /><span className="text-4xl" aria-hidden="true">{emoji}</span><span className="mt-2 block text-sm">{c[key]}</span>
         </label>)}
       </fieldset>
-      <button className={button} disabled={pending || !selected} onClick={() => transition(async () => {
-        if (!selected) return;
-        setError(null);
-        try {
-          const result = await chooseCharm(thing.id, thing.round, selected);
-          if (!result.ok) setError(result.error);
-          router.refresh();
-        } catch { setError('connection_failed'); }
-      })}>{pending ? c.busy : c.confirm}</button>
+      <button className={button} disabled={pending || !selected} onClick={submitProposal}>{pending ? c.busy : c.propose}</button>
+      {thing.proposal && <button className={`${secondary} w-full`} disabled={pending} onClick={() => setChoosing(false)}>{c.backProposal}</button>}
     </>}<ErrorMessage error={error} />
   </div>;
 }
@@ -215,7 +242,7 @@ export function ThingScreen({ result }: { result: Result<ThingSnapshot> }) {
     <Sync enabled={thing.status.startsWith('pending_')} />
     <p className="break-words text-xl font-semibold">{thing.members.map((member) => member.display_name).join(' + ')}</p>
     {thing.status === 'pending_invite' && <><p className="text-muted">{c.invite}</p><InvitePanel thing={thing} /></>}
-    {thing.status === 'pending_charm' && <CharmPanel key={`${thing.id}:${thing.round}`} thing={thing} />}
+    {thing.status === 'pending_charm' && <CharmPanel key={`${thing.id}:${thing.proposal?.version ?? 0}`} thing={thing} />}
     {thing.status === 'active' && thing.charm_key && <div className={`${panel} py-12 text-center`}><p className="text-8xl" aria-label={c[thing.charm_key]}>{charms[thing.charm_key]}</p><p>{c.home}</p></div>}
   </Screen>;
 }
