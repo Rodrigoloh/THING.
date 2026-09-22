@@ -1,2 +1,2 @@
-import { JoinThingScreen } from "@/components/thing/placeholder-screens";
-export default function JoinPage() { return <JoinThingScreen />; }
+import { JoinScreen } from '@/features/things/screens';
+export default function JoinPage() { return <JoinScreen />; }

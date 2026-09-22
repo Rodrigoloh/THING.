@@ -9,7 +9,8 @@ export type Profile = {
   locale: "en" | "es";
 };
 
-export type ThingStatus = "pending" | "active" | "disconnected";
+import type { ThingSnapshot, InvitePreview } from '@/features/things/model';
+export type ThingStatus = "pending_invite" | "pending_charm" | "active" | "disconnected";
 export type ThingMemberRole = "creator" | "member";
 export type ThingMemberStatus = "pending" | "active" | "left";
 export type ThingInviteStatus = "active" | "accepted" | "expired" | "revoked";
@@ -22,6 +23,8 @@ export type Thing = {
   accent_color: string | null;
   created_at: string;
   activated_at: string | null;
+  charm_round: number;
+  request_id: string | null;
 };
 
 export type ThingMember = {
@@ -30,6 +33,7 @@ export type ThingMember = {
   role: ThingMemberRole;
   status: ThingMemberStatus;
   joined_at: string | null;
+  seat: number;
 };
 
 export type ThingInvite = {
@@ -53,13 +57,13 @@ export type Database = {
       };
       things: {
         Row: Thing;
-        Insert: { id?: string; created_by: string; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null };
-        Update: { status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null };
+        Insert: { id?: string; created_by: string; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null };
+        Update: { status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number };
         Relationships: [];
       };
       thing_members: {
         Row: ThingMember;
-        Insert: { thing_id: string; user_id: string; role: ThingMemberRole; status?: ThingMemberStatus; joined_at?: string | null };
+        Insert: { thing_id: string; user_id: string; role: ThingMemberRole; status?: ThingMemberStatus; joined_at?: string | null; seat: number };
         Update: { status?: ThingMemberStatus; joined_at?: string | null };
         Relationships: [];
       };
@@ -69,9 +73,23 @@ export type Database = {
         Update: { status?: ThingInviteStatus };
         Relationships: [];
       };
+      thing_charm_choices: {
+        Row: { thing_id: string; user_id: string; round: number; charm_key: string };
+        Insert: { thing_id: string; user_id: string; round: number; charm_key: string };
+        Update: { charm_key?: string };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
+      create_thing: { Args: { p_request_id: string }; Returns: string };
+      preview_thing_invite: { Args: { p_code: string }; Returns: InvitePreview };
+      accept_thing_invite: { Args: { p_code: string }; Returns: string };
+      choose_thing_charm: { Args: { p_thing_id: string; p_round: number; p_charm: string }; Returns: undefined };
+      thing_snapshot: { Args: { p_thing_id: string }; Returns: ThingSnapshot };
+      list_my_things: { Args: Record<string, never>; Returns: ThingSnapshot[] };
+      renew_thing_invite: { Args: { p_thing_id: string }; Returns: undefined };
+      cancel_pending_thing: { Args: { p_thing_id: string }; Returns: undefined };
       is_active_thing_member: { Args: { target_thing_id: string }; Returns: boolean };
       is_thing_creator: { Args: { target_thing_id: string }; Returns: boolean };
     };

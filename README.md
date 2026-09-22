@@ -1,15 +1,17 @@
 # THING
 
-Mobile-first social game for two people per Thing. The current foundation provides Google / email-code authentication, a required profile, preset or uploaded avatars, English/Spanish UI, and an empty Things dashboard. Social features remain placeholders.
+Mobile-first app for two people per Thing. Email OTP, required profiles, preset/uploaded avatars and English/Spanish UI are joined by real Start / Join / Charm agreement / Thing Home. Games, Hangouts, chat, Moments, Space persistence, streaks and Discover are outside this implementation.
+
+See [Thing flow implementation and deployment](docs/thing-flow.md) for migrations, RPCs, security, tests and hosted acceptance steps. The branch starts at `d64a5e1` and retains the existing OTP improvements through `9a3775a`, profile and avatar behavior.
 
 ## Setup
 
 Requires Node.js 20.9+ for Next.js; use Node.js 22.15+ or 24+ for the test module hooks.
 
 1. `npm install`.
-2. Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` using Supabase Connect. The supplied project API URL is `https://waziecvsylrcovrqavco.supabase.co`. The public key is already saved locally in the ignored `.env.local`.
+2. Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` using Supabase Connect. The supplied project API URL is `https://waziecvsylrcovrqavco.supabase.co`. Keep local credentials in the ignored `.env.local`.
 3. Configure providers, email templates and redirect URLs below.
-4. Apply the files in `supabase/migrations/` in timestamp order through the project's SQL Editor or established migration workflow. The first creates profiles/avatar storage; the second creates the Things relational foundation. Migrations intentionally fail on conflicting existing objects.
+4. Apply missing files in `supabase/migrations/` in timestamp order: profiles (001), original Things foundation (002), then functional Start/Join/Charm upgrade (003). Do not rerun already applied migrations. See `docs/thing-flow.md` for rollout and test ordering.
 5. `npm run dev`, then open `http://localhost:3000`.
 
 On PowerShell use `npm.cmd` if `npm.ps1` is blocked. Set the same two public variables in Vercel's relevant environments and redeploy; Next.js embeds public values at build time. No Google client secret or Supabase service key belongs in the app environment. Missing/invalid environment values fail clearly without echoing values. `.env.local` remains ignored.
@@ -32,18 +34,18 @@ In Supabase Authentication > URL Configuration:
 
 | Setting | Value |
 | --- | --- |
-| Site URL | The actual production origin, `https://<your-production-domain>` |
+| Site URL | `https://thing-lake.vercel.app` |
 | Redirect URL for local development | `http://localhost:3000/auth/callback` |
-| Redirect URL for production | `https://<your-production-domain>/auth/callback` |
+| Redirect URL for production | `https://thing-lake.vercel.app/auth/callback` |
 | Optional preview/test URLs | Add each preview origin followed by `/auth/callback` if you test OAuth there |
 
-The production hostname was not found in repository metadata or environment variables. Replace the placeholders with the real Vercel/custom domain; do not paste placeholders into Supabase. If using another local port or `127.0.0.1`, allow that exact callback too. Until deployment is configured, Site URL can temporarily be `http://localhost:3000`.
+The current production origin is `https://thing-lake.vercel.app`. Use it as Site URL and add `https://thing-lake.vercel.app/auth/callback` to Redirect URLs before enabling Google. If using another local port or `127.0.0.1`, allow that exact callback too. The typed email-code flow calls `verifyOtp` on the same page; it does not use `/auth/callback` to verify a code.
 
 The browser supplies its actual origin to `signInWithOAuth`. The callback sends a fixed relative redirect, so it retains the public origin without trusting forwarded host headers or accepting a user-controlled `next` destination. See [redirect URL documentation](https://supabase.com/docs/guides/auth/redirect-urls).
 
 ### Email code
 
-In Authentication > Sign In / Providers > Email, keep Email and email confirmation enabled; allow new users to sign up. Keep Anonymous Sign-Ins disabled. Configure the Email OTP length to **6 digits** and review expiration/rate limits (the UI expects six numeric digits).
+In Authentication > Sign In / Providers > Email, keep Email and email confirmation enabled; allow new users to sign up. Keep Anonymous Sign-Ins disabled. The UI retains support for configured OTP lengths from 6 to 10 digits. Review expiration and rate limits in your project.
 
 In Authentication > Email Templates, change **Magic Link** to show the numeric token rather than a clickable login link. Also use the same code content for **Confirm signup**, covering the initial-account email. For example:
 
@@ -61,7 +63,7 @@ Configure custom SMTP to send to actual users. Supabase's built-in sender is lim
 ## Architecture and flow
 
 ```text
-/ -> Google OAuth or email code -> verified Supabase account
+/ -> email code -> verified Supabase account
    -> profile lookup -> missing: /profile/create -> /things
                      -> exists: /things
 /profile/settings -> signOut (current browser) -> /
@@ -69,7 +71,7 @@ Configure custom SMTP to send to actual users. Supabase's built-in sender is lim
 
 - `src/lib/supabase/{env,client,server,proxy}.ts` retain environment validation, the SDK browser singleton, per-request server clients and cookie refresh. Only `@supabase/supabase-js` and `@supabase/ssr` were added; no deprecated auth helpers.
 - `src/features/auth/auth.ts` contains SDK-based session reading, Google/code operations, safe error mapping and logout. Opening the app creates no account. `identity-provider.tsx` subscribes to SDK events for presentation only; it neither persists credentials nor manages a second session store.
-- `src/features/auth/auth-screen.tsx` renders the localized entry/code form. Language survives the provider redirect in tab-local storage; a saved profile locale wins after login. Locale never changes theme.
+- `src/features/auth/auth-screen.tsx` renders the localized email/code form. Google code remains for later provider setup, but is hidden from the first screen while the provider is disabled. Language selection stays in tab-local storage; a saved profile locale wins after login. Locale never changes theme. Send failures, configuration failures, rate limits, and connection errors have distinct user-facing copy.
 - `src/app/auth/callback/route.ts` exchanges Google's PKCE code using the server client and writes the SDK session cookies. Success redirects to `/` for the verified profile gate; cancellation/invalid callback returns a safe localized error. No token or raw provider error is rendered.
 - `src/features/profile/{server,profile,actions}.ts` verify `getUser()` before reading/writing, reject legacy guest identities and derive the profile ID from Auth. Server route guards redirect signed-out users; the client gate handles auth events, profile loading/errors and navigation.
 - `src/app/profile/settings/page.tsx` and `src/features/auth/account-settings.tsx` provide minimal logout; the empty dashboard links to settings. No complete settings screen was added.
@@ -79,9 +81,9 @@ Existing `/things`, `/things/new`, `/join`, `/join/[code]` and `/thing/[thingId]
 
 ## Things data foundation
 
-`20260922000200_create_things.sql` adds `things`, `thing_members`, and `thing_invites`. It defines UUID keys, Auth foreign keys, lifecycle checks, indexes, a single creator per Thing, and a concurrency-safe maximum of two memberships. A pending Thing has no activation timestamp; active or disconnected Things retain one. Invite codes are unique uppercase alphanumeric values of 6-32 characters, and their expiry must follow creation.
+The unchanged `20260922000200_create_things.sql` from `d64a5e1` defines `things`, `thing_members`, `thing_invites`, UUID/Auth keys, lifecycle constraints, indexes, one creator and a maximum of two members. Existing invite codes and expiry constraints remain intact.
 
-RLS allows verified accounts to see only Things where they are active members (or the creator during initial setup). Only the creator can create and configure a Thing or manage its invites. A client can insert only its own initial active creator membership; the future invite-acceptance operation must add the second member transactionally. Invite codes are not publicly searchable, and no invitation redemption/UI behavior is implemented yet.
+The additive `20260922000300_thing_flow.sql` supplies the functional API. It keeps RLS and the member-limit trigger, adds unique membership seats and private Charm rounds, and restricts writes to authorized transactional RPCs. States are `pending_invite → pending_charm → active`. Direct creator activation is replaced by two matching choices. All existing rows are retained; pending rows are mapped by active member count. See the flow document for every RPC and policy adjustment.
 
 ## Profiles and avatars
 
@@ -104,23 +106,21 @@ node scripts/check-routes.mjs
 
 `CHECK_ORIGIN` can point the route check to another local test port. It performs only unauthenticated HTTP reads. Auth tests mock SDK boundaries: Google redirect configuration, email/code validation and failure paths, session reuse, safe identity projection, legacy guest rejection, logout, EN/ES auth UI and absence of guest signup/demo copy. Existing profile, avatar, locale, empty-dashboard and environment tests remain.
 
-Run `supabase/tests/profiles_rls.sql`, `avatars_rls.sql`, `account_access.sql`, and `things_rls.sql` in a development SQL Editor after the migrations. Each rolls back fixtures. They test ownership, cross-user denial, column grants, guest-account denial, avatar consistency, two-member enforcement, invitation visibility, and creator-only mutations. The SQL suite can also run against isolated PostgreSQL with Auth/Storage metadata shims; that does not substitute for hosted API verification.
+The existing SQL files in `supabase/tests/` are preserved. `npm test` executes the original `things_rls.sql` against migration 002 before applying 003, then checks the new RPC-only API, RLS, transactions and races. Do not run the original direct-write Things test against an upgraded database; it intentionally describes the old API. Other profile/avatar policy tests remain available for development use.
 
 ### Manual end-to-end verification after configuration
 
-No browser automation surface is connected in this environment. Complete these checks locally and on the actual Vercel deployment:
+Complete these hosted acceptance checks with two browser sessions on the actual deployment:
 
-1. Clear site data in a test browser. `/` shows Google, Email and EN/ES; `/things`, `/profile/create`, `/join`, and `/thing/test/chat` return to `/`. Merely opening `/` creates no Auth user.
-2. Toggle EN/ES; submit an invalid email. Request a code for an address you control. Enter a wrong/expired code: remain on the form with an error. Enter the valid six-digit code: reach `/profile/create` for a new account.
+1. Clear site data in a test browser. `/` shows Email and EN/ES; `/things`, `/profile/create`, `/join`, and `/thing/test/chat` return to `/`. Merely opening `/` creates no Auth user.
+2. Toggle EN/ES; submit an invalid email. Request a code for an address you control. Enter a wrong/expired code: remain on the form with an error. Enter the valid code: reach `/profile/create` for a new account.
 3. Choose a name, preset avatar and language, submit, and reach empty `/things`. Refresh and reopen the browser: the same account/profile should remain while the Supabase session is valid.
 4. Use Account settings > Sign out. Verify return to `/`, then try a protected URL and browser Back. Sign back into the same account: skip profile creation and retain name/avatar/locale.
-5. In an independent browser, continue with Google. Check consent and the callback on localhost and production. New account goes to profile creation; existing account goes to `/things`. Cancel consent and test `/auth/callback` without a code: return to auth with a safe error.
+5. After Google is enabled and restored to the entry screen, check consent and the callback on localhost and production. New account goes to profile creation; existing account goes to `/things`. Cancel consent and test `/auth/callback` without a code: return to auth with a safe error.
 6. Test a second distinct account with a photo upload. Refresh and confirm the photo loads. Check JPEG/PNG/WebP, rejection of GIF/invalid bytes/over-5-MiB files, preset/photo switching before submit, and initials fallback. Signing into the same account in two browsers should yield the SAME ID; distinct accounts yield different IDs.
 7. Run the SQL policy tests in a development project, including cross-user replacement/deletion denial. Hosted upload/download behavior still requires this live acceptance run.
 8. Confirm all existing placeholders remain accessible after profile creation, `/dev` is 404 in production, and no normal screen shows theme/developer controls. In development, `/dev` should show only safe account/profile information.
 
-## Current verification status
+## Verification scope
 
-Local tests (26), TypeScript, lint, production build, unauthenticated HTTP route checks and SQL policy checks pass. The project owner reports completing Supabase configuration. The latest read-only probe still reports Google disabled and Email enabled; the profiles endpoint now returns HTTP 401 to an unauthenticated request, rather than the earlier missing-table response. Authenticated profile access, email templates, SMTP delivery and Google credentials still require end-to-end verification.
-
-No emails or Auth users were created during automated verification. Use the manual steps above to verify the deployed application after provider configuration. The local environment file remains excluded from Git.
+The automated suite uses temporary local PostgreSQL with Auth/Storage metadata shims, SDK boundary tests and rendered UI tests. It sends no email and changes no hosted Supabase data. Build and route probes may use local placeholder public environment values; deploy with the actual project public URL/key. Hosted email delivery, OAuth and the final two-browser acceptance must be verified in the target environment.

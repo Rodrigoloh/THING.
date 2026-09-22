@@ -10,6 +10,7 @@ import { useProfile } from "./profile-provider";
 import { AvatarPicker } from "./avatar-picker";
 import { type AvatarChoice, type AvatarError } from "./avatar";
 import { uploadProfilePhoto } from "./avatar-storage";
+import { browserInviteDestination } from '@/features/things/model';
 
 export function ProfileForm() {
   const { locale, setLocale, t } = useLocale();
@@ -55,7 +56,7 @@ export function ProfileForm() {
         : await save();
       if (!result.ok) { setError(result.error); return; }
       acceptProfile(result.profile);
-      router.replace(result.destination);
+      router.replace(browserInviteDestination() ?? result.destination);
       router.refresh();
     } catch {
       setError("connectionFailed");
