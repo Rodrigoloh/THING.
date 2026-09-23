@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeCsvHeader, normalizePromptRow, parseCsv } from '../scripts/import-game-prompts.ts';
+import { assertNoPromptDuplicates, findPromptDuplicateGroups, normalizeCsvHeader, normalizePromptForDuplicateCheck, normalizePromptRow, parseCsv } from '../scripts/import-game-prompts.ts';
 
 const masterHeader = 'ID,Hangout,Engine,Round Type,Level,Prompt EN,Prompt ES,Option A EN,Option A ES,Option B EN,Option B ES,Mood,Context,Intensity,Tags,Adult,Reveal Style,Notes,Status';
 
@@ -27,28 +27,55 @@ test('CSV parsing reports missing required headers clearly', () => {
   assert.throws(() => parseCsv('\n, ,\r\n'), /CSV is missing required header\(s\):/);
 });
 
-test('level is null for non-Hot engines and derived strictly for every Hot prefix', () => {
+test('real master rows map Hangout to game_type and preserve Round Type separately', () => {
   const base = {
-    round_type: 'Reveal', prompt_en: 'Pick one', prompt_es: 'Elige una',
+    prompt_en: 'Pick one', prompt_es: 'Elige una',
     option_a_en: 'A', option_a_es: 'A', option_b_en: 'B', option_b_es: 'B',
     context: 'both', status: 'Approved',
   };
   const cases = [
-    ['SB-001', 'same_brain', 'standard', null],
-    ['GU-001', 'know_me', 'default', null],
-    ['WH-001', 'this_or_that', 'normal', null],
-    ['HT-F-001', 'hot', 'FLIRTY', 'flirty'],
-    ['HT-B-001', 'hot', 'Bold', 'bold'],
-    ['HT-S-001', 'hot', 'spicy', 'spicy'],
-    ['HT-K-001', 'hot', 'KitKat', 'kitkat'],
+    ['SB-001', 'Same Brain', 'same_brain', 'choice', 'standard', 'same_brain', 'reveal', null],
+    ['GU-001', 'Know Me', 'guess', 'prediction', 'default', 'know_me', 'guess', null],
+    ['WH-001', 'This or That', 'who', 'vote', 'normal', 'this_or_that', 'reveal', null],
+    ['HT-F-001', 'Hot', 'hot', 'choice', 'FLIRTY', 'hot', 'reveal', 'flirty'],
+    ['HT-B-001', 'Hot', 'hot', 'choice', 'Bold', 'hot', 'reveal', 'bold'],
+    ['HT-S-001', 'Hot', 'guess', 'prediction', 'spicy', 'hot', 'guess', 'spicy'],
+    ['HT-K-001', 'Hot', 'hot', 'respond', 'KitKat', 'hot', 'respond', 'kitkat'],
   ];
-  for (const [id, engine, level, expected] of cases) {
-    assert.equal(normalizePromptRow({ ...base, id, engine, level }).level, expected, id);
+  for (const [id, hangout, engine, round_type, level, expectedGameType, expectedRoundType, expectedLevel] of cases) {
+    const normalized = normalizePromptRow({ ...base, id, hangout, engine, round_type, level });
+    assert.equal(normalized.game_type, expectedGameType, `${id} game_type`);
+    assert.equal(normalized.round_type, expectedRoundType, `${id} round_type`);
+    assert.equal(normalized.level, expectedLevel, `${id} level`);
   }
-  assert.equal(normalizePromptRow({ ...base, id: 'SB-002', engine: 'same_brain', level: '' }).level, null);
+  assert.equal(normalizePromptRow({ ...base, id: 'SB-002', hangout: 'Same Brain', engine: 'same_brain', round_type: 'move', level: '' }).round_type, 'move');
 });
 
 test('Hot level must agree with its stable ID prefix', () => {
-  const row = { id: 'HT-F-999', engine: 'hot', level: 'Spicy', round_type: 'Reveal', prompt_en: 'Pick', prompt_es: 'Elige', option_a_en: 'A', option_a_es: 'A', option_b_en: 'B', option_b_es: 'B', context: 'both', status: 'Approved' };
+  const row = { id: 'HT-F-999', hangout: 'Hot', engine: 'hot', level: 'Spicy', round_type: 'Reveal', prompt_en: 'Pick', prompt_es: 'Elige', option_a_en: 'A', option_a_es: 'A', option_b_en: 'B', option_b_es: 'B', context: 'both', status: 'Approved' };
   assert.throws(() => normalizePromptRow(row), /HT-F-999 does not match level spicy/);
+});
+
+test('prompt duplicate preflight normalizes only case and whitespace and reports every row', () => {
+  const base = {
+    hangout: 'Hot', engine: 'hot', round_type: 'choice', level: 'Flirty',
+    prompt_es: '¿Qué es más hot?', option_a_en: 'A', option_a_es: 'A',
+    option_b_en: 'B', option_b_es: 'B', context: 'both', status: 'Approved',
+  };
+  const rows = [
+    normalizePromptRow({ ...base, id: 'HT-F-010', prompt_en: 'Which  is hotter?' }),
+    normalizePromptRow({ ...base, id: 'HT-F-011', prompt_en: ' which is HOTTER? ' }),
+    normalizePromptRow({ ...base, id: 'HT-F-012', prompt_en: 'Which is hotter!' }),
+  ];
+  assert.equal(normalizePromptForDuplicateCheck('  Which\t is  HOTTER?  '), 'which is hotter?');
+  const groups = findPromptDuplicateGroups(rows);
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].rows.map((row) => row.stable_id), ['HT-F-010', 'HT-F-011']);
+  assert.throws(
+    () => assertNoPromptDuplicates(rows),
+    (error) => error.message.includes('(hot, "which is hotter?")')
+      && error.message.includes('stable_id=HT-F-010')
+      && error.message.includes('stable_id=HT-F-011')
+      && !error.message.includes('stable_id=HT-F-012'),
+  );
 });
