@@ -10,7 +10,7 @@ export type Profile = {
 };
 
 import type { ThingSnapshot, InvitePreview, InviteRpcResult, ThingColor } from '@/features/things/model';
-import type { CreateHangoutResult, GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup, SameBrainSnapshot, SameBrainResult } from '@/features/hangouts/model';
+import type { ChoiceSnapshot, CreateHangoutResult, GameType, HangoutSnapshot, HotContext, HotLevel, HotMode, HotSetup, HotSnapshot, KnowMeResult, SameBrainSnapshot, SameBrainResult, ThisOrThatResult } from '@/features/hangouts/model';
 import type { SpaceSnapshot } from '@/features/space/model';
 export type ThingStatus = "pending_invite" | "pending_charm" | "active" | "disconnected";
 export type ThingMemberRole = "creator" | "member";
@@ -168,8 +168,9 @@ export type Database = {
       end_thing: { Args: { p_thing_id: string }; Returns: undefined };
       hot_setup_snapshot: { Args: { p_thing_id: string }; Returns: HotSetup };
       set_hot_consent: { Args: { p_thing_id: string; p_level: HotLevel }; Returns: HotSetup };
-      create_hangout: { Args: { p_thing_id: string; p_game_type: GameType; p_hot_mode: HotMode | null }; Returns: CreateHangoutResult };
+      create_hangout: { Args: { p_thing_id: string; p_game_type: GameType; p_hot_mode: HotMode | null; p_context: HotContext | null }; Returns: CreateHangoutResult };
       join_hangout: { Args: { p_hangout_id: string }; Returns: undefined };
+      abandon_hangout: { Args: { p_hangout_id: string }; Returns: undefined };
       hangout_snapshot: { Args: { p_hangout_id: string }; Returns: HangoutSnapshot };
       add_hot_deck_card: { Args: { p_hangout_id: string; p_content: string }; Returns: string };
       ready_hot_batch: { Args: { p_hangout_id: string }; Returns: undefined };
@@ -178,6 +179,23 @@ export type Database = {
       submit_same_brain_answer: { Args: { p_hangout_id: string; p_round_id: string; p_answer_key: 'a' | 'b' }; Returns: undefined };
       advance_same_brain_round: { Args: { p_hangout_id: string }; Returns: undefined };
       complete_same_brain: { Args: { p_hangout_id: string }; Returns: SameBrainResult };
+      start_know_me: { Args: { p_hangout_id: string }; Returns: undefined };
+      know_me_snapshot: { Args: { p_hangout_id: string }; Returns: ChoiceSnapshot };
+      submit_know_me_answer: { Args: { p_hangout_id: string; p_round_id: string; p_answer_key: 'a' | 'b' }; Returns: undefined };
+      advance_know_me_round: { Args: { p_hangout_id: string }; Returns: undefined };
+      complete_know_me: { Args: { p_hangout_id: string }; Returns: KnowMeResult };
+      start_this_or_that: { Args: { p_hangout_id: string }; Returns: undefined };
+      this_or_that_snapshot: { Args: { p_hangout_id: string }; Returns: ChoiceSnapshot };
+      submit_this_or_that_vote: { Args: { p_hangout_id: string; p_round_id: string; p_answer_key: 'a' | 'b' }; Returns: undefined };
+      advance_this_or_that_round: { Args: { p_hangout_id: string }; Returns: undefined };
+      complete_this_or_that: { Args: { p_hangout_id: string }; Returns: ThisOrThatResult };
+      start_hot: { Args: { p_hangout_id: string }; Returns: undefined };
+      hot_snapshot: { Args: { p_hangout_id: string }; Returns: HotSnapshot };
+      submit_hot_round: { Args: { p_hangout_id: string; p_round_id: string; p_answer_key: 'a' | 'b' }; Returns: undefined };
+      advance_hot: { Args: { p_hangout_id: string }; Returns: undefined };
+      skip_hot_prompt: { Args: { p_hangout_id: string; p_round_id: string }; Returns: undefined };
+      submit_hot_escalation: { Args: { p_hangout_id: string; p_accept: boolean }; Returns: undefined };
+      complete_hot: { Args: { p_hangout_id: string }; Returns: import('@/features/hangouts/model').HotResult };
       space_snapshot: { Args: { p_thing_id: string }; Returns: SpaceSnapshot };
       is_active_thing_member: { Args: { target_thing_id: string }; Returns: boolean };
       is_thing_creator: { Args: { target_thing_id: string }; Returns: boolean };

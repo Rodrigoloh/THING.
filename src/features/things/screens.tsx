@@ -93,8 +93,13 @@ function RecentActivity({ thing }: { thing: ThingSnapshot }) {
   return <section className="space-y-3">
     <h2 className="text-sm font-semibold uppercase tracking-[.16em] text-muted">{c.recentActivity}</h2>
     {thing.recent_hangouts.length ? <ul className="divide-y divide-border border-y border-border">{thing.recent_hangouts.map((item) => <li key={item.id} className="grid grid-cols-[1fr_auto] gap-4 py-5">
-      <div><span className="font-heading text-sm font-bold tracking-wide">{h[item.game_type].toUpperCase()}</span>{item.result?.matches !== undefined && item.result.rounds !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.matches} / {item.result.rounds} {c.matchedShort}</p>}{item.souvenir_keys.map((key) => <span key={key} className="mt-2 inline-block rotate-[-1deg] border border-[var(--thing-accent-border)] bg-[var(--thing-primary-soft)] px-2 py-1 text-xs font-bold">{souvenirLabels[key] ?? key}</span>)}</div>
-      <div className="text-right">{item.result?.match_rate !== undefined && <strong className="thing-accent-text block text-2xl">{Math.round(item.result.match_rate * 100)}%</strong>}<span className="text-xs text-muted">{new Date(item.completed_at ?? item.created_at).toLocaleDateString(locale)}</span></div>
+      <div><span className="font-heading text-sm font-bold tracking-wide">{h[item.game_type].toUpperCase()}</span>
+        {item.result?.matches !== undefined && item.result.rounds !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.matches} / {item.result.rounds} {c.matchedShort}</p>}
+        {item.result?.correct_predictions !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.correct_predictions} / {item.result.rounds ?? 8} predictions</p>}
+        {item.result?.agreements !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.agreements} / {item.result.rounds ?? 8} agreed</p>}
+        {item.result?.prompts_completed !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.prompts_completed} prompts · reached {item.result.highest_level}</p>}
+        {item.souvenir_keys.map((key) => <span key={key} className="mt-2 inline-block rotate-[-1deg] border border-[var(--thing-accent-border)] bg-[var(--thing-primary-soft)] px-2 py-1 text-xs font-bold">{souvenirLabels[key] ?? key}</span>)}</div>
+      <div className="text-right">{item.result?.match_rate !== undefined && <strong className="thing-accent-text block text-2xl">{Math.round(item.result.match_rate * 100)}%</strong>}{item.result?.agreement_rate !== undefined && <strong className="thing-accent-text block text-2xl">{Math.round(item.result.agreement_rate * 100)}%</strong>}<span className="text-xs text-muted">{new Date(item.completed_at ?? item.created_at).toLocaleDateString(locale)}</span></div>
     </li>)}</ul> : <div className="border-y border-dashed border-border py-6"><p className="font-semibold">{c.nothingYet}</p><p className="text-sm text-muted">{c.makeSomething}</p></div>}
   </section>;
 }

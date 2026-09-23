@@ -1,7 +1,8 @@
 export const gameTypes = ['same_brain', 'know_me', 'this_or_that', 'hot'] as const;
 export type GameType = typeof gameTypes[number];
-export type HotLevel = 'flirty' | 'bold' | 'spicy';
+export type HotLevel = 'flirty' | 'bold' | 'spicy' | 'kitkat';
 export type HotMode = 'standard' | 'our_deck';
+export type HotContext = 'same_place' | 'apart';
 export type CreateHangoutResult = { id: string; game_type: GameType; created: boolean; joined: boolean; conflict: boolean };
 
 export type HotSetup = {
@@ -17,6 +18,7 @@ export type HangoutSnapshot = {
   game_type: GameType;
   state: 'setup' | 'waiting' | 'ready' | 'active' | 'complete' | 'abandoned';
   color_key: import('@/features/things/model').ThingColor;
+  context: HotContext | null;
   hot_level: HotLevel | null;
   hot_mode: HotMode | null;
   created_at: string;
@@ -27,6 +29,34 @@ export type HangoutSnapshot = {
   partner_card_count: number;
   own_batch_ready: boolean;
   both_batches_ready: boolean;
+};
+
+export type ChoiceAnswer = { answer_key: 'a' | 'b'; is_self: boolean; is_subject: boolean; display_name: string };
+export type ChoiceRound = {
+  id: string; number: number; state: 'answering' | 'revealed';
+  prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string;
+  subject_name: string | null; predictor_name: string | null; role: 'subject' | 'predictor' | 'voter';
+  own_answer: 'a' | 'b' | null; answer_count: number; answers: ChoiceAnswer[];
+};
+export type KnowMeResult = { rounds: number; correct_predictions: number; predictions_by_user: Record<string, number> };
+export type ThisOrThatResult = { rounds: number; agreements: number; agreement_rate: number; votes_for_a: number; votes_for_b: number };
+export type ChoiceSnapshot = {
+  id: string; thing_id: string; game_type: 'know_me' | 'this_or_that'; state: HangoutSnapshot['state'];
+  color_key: import('@/features/things/model').ThingColor;
+  members: { user_id: string; display_name: string }[]; round: ChoiceRound | null;
+  result: KnowMeResult | ThisOrThatResult | null;
+};
+
+export type HotResult = { prompts_completed: number; highest_level: HotLevel; context: HotContext; reached_spicy: boolean; reached_kitkat: boolean };
+export type HotSnapshot = {
+  id: string; thing_id: string; state: HangoutSnapshot['state']; color_key: import('@/features/things/model').ThingColor;
+  context: HotContext; current_level: HotLevel; notice: 'level_up' | 'staying_here' | null; kitkat_unlocked: boolean; completed_prompts: number;
+  members: { display_name: string }[];
+  gate: { target_level: Exclude<HotLevel, 'flirty'>; own_vote: boolean | null; votes_cast: number } | null;
+  round: null | { id: string; number: number; state: 'answering' | 'revealed'; level: HotLevel; skipped: boolean; round_type: string;
+    prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string;
+    own_answer: 'a' | 'b' | null; answer_count: number; answers: { answer_key: 'a' | 'b'; is_self: boolean; display_name: string }[] };
+  result: HotResult | null;
 };
 
 export type SameBrainAnswer = {

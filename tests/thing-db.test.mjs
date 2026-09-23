@@ -240,19 +240,92 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       assert.equal((await admin.query('select count(*)::int n from public.hangout_members where hangout_id=$1', [raced[0].value.id])).rows[0].n, 2);
       await admin.query("update public.hangouts set state='abandoned',completed_at=now() where id=$1", [raced[0].value.id]);
     });
+    await t.test('open Hangouts can be abandoned safely and immediately free the Thing', async () => {
+      const setup = await rpc(a, 'create_hangout', [joined.id, 'know_me', null]);
+      await assert.rejects(rpc(joined.outsider, 'abandon_hangout', [setup.id]), /hangout_unavailable/);
+      await rpc(a, 'abandon_hangout', [setup.id]);
+      await rpc(joined.partner, 'abandon_hangout', [setup.id]);
+      assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).active_hangout, null);
+      assert.equal((await admin.query('select count(*)::int n from public.hangout_results where hangout_id=$1', [setup.id])).rows[0].n, 0);
+
+      const waiting = await rpc(a, 'create_hangout', [joined.id, 'same_brain', null]);
+      await rpc(a, 'start_same_brain', [waiting.id]);
+      assert.equal((await rpc(a, 'hangout_snapshot', [waiting.id])).state, 'waiting');
+      await rpc(joined.partner, 'abandon_hangout', [waiting.id]);
+
+      const active = await rpc(a, 'create_hangout', [joined.id, 'this_or_that', null]);
+      await rpc(a, 'start_this_or_that', [active.id]);
+      await rpc(joined.partner, 'join_hangout', [active.id]);
+      assert.equal((await rpc(a, 'hangout_snapshot', [active.id])).state, 'active');
+      await rpc(a, 'abandon_hangout', [active.id]);
+      assert.equal((await rpc(joined.partner, 'hangout_snapshot', [active.id])).state, 'abandoned');
+
+      const completed = await rpc(a, 'create_hangout', [joined.id, 'know_me', null]);
+      await admin.query("update public.hangouts set state='complete',completed_at=now() where id=$1", [completed.id]);
+      await assert.rejects(rpc(a, 'abandon_hangout', [completed.id]), /hangout_complete/);
+      assert.equal((await admin.query('select state from public.hangouts where id=$1', [completed.id])).rows[0].state, 'complete');
+    });
+    await t.test('Know Me alternates roles, keeps answers private and persists prediction results', async () => {
+      const created = await rpc(a, 'create_hangout', [joined.id, 'know_me', null]);
+      await rpc(a, 'start_know_me', [created.id]);
+      await rpc(a, 'start_know_me', [created.id]);
+      assert.equal((await rpc(a, 'know_me_snapshot', [created.id])).state, 'waiting');
+      await assert.rejects(rpc(joined.partner, 'know_me_snapshot', [created.id]), /hangout_unavailable/);
+      await rpc(joined.partner, 'join_hangout', [created.id]);
+      const rounds = (await admin.query('select id,round_number,subject_user_id from public.hangout_rounds where hangout_id=$1 order by round_number', [created.id])).rows;
+      assert.equal(rounds.length, 8);
+      assert.deepEqual(rounds.map((round) => round.subject_user_id), [a.id, joined.partner.id, a.id, joined.partner.id, a.id, joined.partner.id, a.id, joined.partner.id]);
+      for (const [index, round] of rounds.entries()) {
+        const subject = round.subject_user_id === a.id ? a : joined.partner;
+        const predictor = subject === a ? joined.partner : a;
+        const first = await rpc(subject, 'know_me_snapshot', [created.id]);
+        const second = await rpc(predictor, 'know_me_snapshot', [created.id]);
+        assert.equal(first.round.id, second.round.id); assert.equal(first.round.role, 'subject'); assert.equal(second.round.role, 'predictor');
+        await rpc(subject, 'submit_know_me_answer', [created.id, round.id, 'a']);
+        const hidden = await rpc(predictor, 'know_me_snapshot', [created.id]);
+        assert.equal(hidden.round.own_answer, null); assert.deepEqual(hidden.round.answers, []); assert.doesNotMatch(JSON.stringify(hidden), /\"own_answer\":\"a\"/);
+        await rpc(predictor, 'submit_know_me_answer', [created.id, round.id, index < 5 ? 'a' : 'b']);
+        assert.equal((await rpc(a, 'know_me_snapshot', [created.id])).round.answers.length, 2);
+        await rpc(index % 2 ? joined.partner : a, 'advance_know_me_round', [created.id]);
+      }
+      const complete = await rpc(a, 'know_me_snapshot', [created.id]);
+      assert.equal(complete.state, 'complete'); assert.equal(complete.result.correct_predictions, 5); assert.equal(complete.result.rounds, 8);
+      assert.equal(Object.values(complete.result.predictions_by_user).reduce((sum, value) => sum + value, 0), 5);
+      await assert.rejects(rpc(a, 'abandon_hangout', [created.id]), /hangout_complete/);
+      assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).active_hangout, null);
+    });
+    await t.test('This or That keeps votes private, reveals together and stores agreement', async () => {
+      const created = await rpc(a, 'create_hangout', [joined.id, 'this_or_that', null]);
+      await rpc(a, 'start_this_or_that', [created.id]);
+      await rpc(joined.partner, 'join_hangout', [created.id]);
+      const rounds = (await admin.query('select id from public.hangout_rounds where hangout_id=$1 order by round_number', [created.id])).rows;
+      for (const [index, round] of rounds.entries()) {
+        await rpc(a, 'submit_this_or_that_vote', [created.id, round.id, 'a']);
+        const hidden = await rpc(joined.partner, 'this_or_that_snapshot', [created.id]);
+        assert.deepEqual(hidden.round.answers, []); assert.equal(hidden.round.own_answer, null);
+        await rpc(joined.partner, 'submit_this_or_that_vote', [created.id, round.id, index < 6 ? 'a' : 'b']);
+        const revealed = await rpc(a, 'this_or_that_snapshot', [created.id]);
+        assert.equal(revealed.round.answers.length, 2);
+        await rpc(a, 'advance_this_or_that_round', [created.id]);
+      }
+      const complete = await rpc(joined.partner, 'this_or_that_snapshot', [created.id]);
+      assert.equal(complete.state, 'complete'); assert.equal(complete.result.agreements, 6); assert.equal(Number(complete.result.agreement_rate), 0.75);
+      assert.equal(complete.result.votes_for_a, 14); assert.equal(complete.result.votes_for_b, 2);
+      assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).active_hangout, null);
+    });
     await t.test('Hot uses the lower shared consent and gates private Our Deck batches', async () => {
       assert.deepEqual(await rpc(a, 'hot_setup_snapshot', [joined.id]), { own_level: null, shared_level: null, both_ready: false, our_deck_available: false });
       let setup = await rpc(a, 'set_hot_consent', [joined.id, 'spicy']);
       assert.equal(setup.shared_level, null); assert.equal(setup.our_deck_available, false);
       setup = await rpc(joined.partner, 'set_hot_consent', [joined.id, 'bold']);
       assert.equal(setup.shared_level, 'bold'); assert.equal(setup.our_deck_available, false);
-      await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck']), /our_deck_unavailable/);
-      const standard = await rpc(a, 'create_hangout', [joined.id, 'hot', 'standard']);
-      assert.equal((await rpc(a, 'hangout_snapshot', [standard.id])).hot_level, 'bold');
+      await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck', 'same_place']), /our_deck_unavailable/);
+      const standard = await rpc(a, 'create_hangout', [joined.id, 'hot', 'standard', 'same_place']);
+      assert.equal((await rpc(a, 'hangout_snapshot', [standard.id])).hot_level, 'flirty');
       await admin.query("update public.hangouts set state='abandoned',completed_at=now() where id=$1", [standard.id]);
       setup = await rpc(joined.partner, 'set_hot_consent', [joined.id, 'spicy']);
       assert.equal(setup.shared_level, 'spicy'); assert.equal(setup.our_deck_available, true);
-      ourDeck = (await rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck'])).id;
+      ourDeck = (await rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck', 'same_place'])).id;
       await rpc(joined.partner, 'join_hangout', [ourDeck]);
       for (const text of ['one', 'two', 'three']) await rpc(a, 'add_hot_deck_card', [ourDeck, text]);
       for (const text of ['four', 'five', 'six']) await rpc(joined.partner, 'add_hot_deck_card', [ourDeck, text]);
@@ -270,7 +343,86 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       setup = await rpc(a, 'set_hot_consent', [joined.id, 'bold']);
       assert.equal(setup.shared_level, 'bold'); assert.equal(setup.our_deck_available, false);
       assert.equal((await rpc(a, 'hangout_snapshot', [ourDeck])).state, 'abandoned');
-      await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck']), /our_deck_unavailable/);
+      await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck', 'same_place']), /our_deck_unavailable/);
+    });
+    await t.test('Hot V1 stores context, escalates mutually, skips safely and unlocks KitKat after three Spicy completions', async () => {
+      async function answerCurrent(id, advance = true) {
+        let snapshot = await rpc(a, 'hot_snapshot', [id]);
+        const roundId = snapshot.round.id;
+        await rpc(a, 'submit_hot_round', [id, roundId, 'a']);
+        const hidden = await rpc(joined.partner, 'hot_snapshot', [id]);
+        assert.equal(hidden.round.own_answer, null); assert.deepEqual(hidden.round.answers, []);
+        await rpc(joined.partner, 'submit_hot_round', [id, roundId, 'b']);
+        snapshot = await rpc(a, 'hot_snapshot', [id]);
+        assert.equal(snapshot.round.answers.length, 2);
+        if (advance) await rpc(a, 'advance_hot', [id]);
+      }
+      async function acceptGate(id, target) {
+        let snapshot = await rpc(a, 'hot_snapshot', [id]);
+        assert.equal(snapshot.gate.target_level, target);
+        await rpc(a, 'submit_hot_escalation', [id, true]);
+        const other = await rpc(joined.partner, 'hot_snapshot', [id]);
+        assert.equal(other.gate.own_vote, null); assert.equal(other.gate.votes_cast, 1);
+        assert.doesNotMatch(JSON.stringify(other), /\"own_vote\":true/);
+        await rpc(joined.partner, 'submit_hot_escalation', [id, true]);
+        snapshot = await rpc(a, 'hot_snapshot', [id]);
+        assert.equal(snapshot.current_level, target); assert.equal(snapshot.gate, null);
+      }
+      async function reachSpicy(context) {
+        const created = await rpc(a, 'create_hangout', [joined.id, 'hot', 'standard', context]);
+        await rpc(a, 'start_hot', [created.id]);
+        await rpc(joined.partner, 'join_hangout', [created.id]);
+        let snapshot = await rpc(a, 'hot_snapshot', [created.id]);
+        assert.equal(snapshot.context, context); assert.equal(snapshot.current_level, 'flirty');
+        for (let i = 0; i < 2; i++) await answerCurrent(created.id);
+        await acceptGate(created.id, 'bold');
+        for (let i = 0; i < 2; i++) await answerCurrent(created.id);
+        await acceptGate(created.id, 'spicy');
+        return created.id;
+      }
+
+      const skipped = await rpc(a, 'create_hangout', [joined.id, 'hot', 'standard', 'apart']);
+      await rpc(a, 'start_hot', [skipped.id]); await rpc(joined.partner, 'join_hangout', [skipped.id]);
+      const firstPrompt = (await rpc(a, 'hot_snapshot', [skipped.id])).round.id;
+      await rpc(a, 'skip_hot_prompt', [skipped.id, firstPrompt]);
+      let skippedView = await rpc(a, 'hot_snapshot', [skipped.id]);
+      assert.notEqual(skippedView.round.id, firstPrompt); assert.equal(skippedView.completed_prompts, 0);
+      await answerCurrent(skipped.id); await answerCurrent(skipped.id);
+      await rpc(a, 'submit_hot_escalation', [skipped.id, true]);
+      await rpc(joined.partner, 'submit_hot_escalation', [skipped.id, false]);
+      skippedView = await rpc(a, 'hot_snapshot', [skipped.id]);
+      assert.equal(skippedView.current_level, 'flirty'); assert.equal(skippedView.notice, 'staying_here');
+      await rpc(joined.partner, 'abandon_hangout', [skipped.id]);
+      assert.equal((await admin.query("select count(*)::int n from public.hangout_results r join public.hangouts h on h.id=r.hangout_id where h.thing_id=$1 and r.game_type='hot'", [joined.id])).rows[0].n, 0);
+
+      for (const [sessionIndex, context] of ['same_place', 'apart', 'same_place'].entries()) {
+        const id = await reachSpicy(context);
+        if (sessionIndex === 0) {
+          await answerCurrent(id); await answerCurrent(id);
+          const locked = await rpc(a, 'hot_snapshot', [id]);
+          assert.equal(locked.kitkat_unlocked, false); assert.equal(locked.gate, null); assert.equal(locked.current_level, 'spicy');
+        } else await answerCurrent(id, false);
+        const result = await rpc(a, 'complete_hot', [id]);
+        assert.equal(result.highest_level, 'spicy'); assert.equal(result.context, context); assert.equal(result.reached_spicy, true); assert.equal(result.reached_kitkat, false);
+        const usedContexts = (await admin.query('select distinct p.context from public.hangout_rounds r join public.game_prompts p on p.id=r.prompt_id where r.hangout_id=$1', [id])).rows.map((row) => row.context);
+        assert.ok(usedContexts.every((value) => value === 'both' || value === context));
+        assert.equal((await admin.query('select count(*)=count(distinct prompt_id) unique_prompts from public.hangout_rounds where hangout_id=$1', [id])).rows[0].unique_prompts, true);
+      }
+      let space = await rpc(a, 'space_snapshot', [joined.id]);
+      assert.equal(space.hot.spicy_hangouts, 3); assert.equal(space.hot.kitkat_unlocked, true);
+
+      const kitkat = await reachSpicy('same_place');
+      await answerCurrent(kitkat); await answerCurrent(kitkat);
+      let gate = await rpc(a, 'hot_snapshot', [kitkat]);
+      assert.equal(gate.gate.target_level, 'kitkat'); assert.equal(gate.kitkat_unlocked, true);
+      await acceptGate(kitkat, 'kitkat');
+      await answerCurrent(kitkat, false);
+      const final = await rpc(joined.partner, 'complete_hot', [kitkat]);
+      assert.equal(final.highest_level, 'kitkat'); assert.equal(final.reached_kitkat, true);
+      space = await rpc(a, 'space_snapshot', [joined.id]);
+      assert.equal(space.hot.highest_level, 'kitkat'); assert.equal(space.hot.hangouts, 4);
+      await assert.rejects(rpc(joined.outsider, 'hot_snapshot', [kitkat]), /hangout_unavailable/);
+      await assert.rejects(joined.outsider.client.query('select * from public.hangout_level_votes'), /permission denied/);
     });
     await t.test('Same Brain keeps answers private, persists results and builds Space', async () => {
       async function playSession(matchCount) {

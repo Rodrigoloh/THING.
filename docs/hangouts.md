@@ -1,6 +1,6 @@
 # Hangout foundation
 
-Migration `20260922000500_thing_home_hangouts_foundation.sql` adds the durable entry/setup layer. Additive migration `20260922000600_same_brain_results_space.sql` completes Same Brain while leaving the other three engines at their existing foundation states.
+Migration `20260922000500_thing_home_hangouts_foundation.sql` adds the durable entry/setup layer. Migration 006 completes Same Brain, migration 007 guarantees one shared session, and `20260922000800_remaining_hangout_engines.sql` adds safe abandonment plus Know Me, This or That and Hot V1.
 
 ## Same Brain
 
@@ -18,6 +18,18 @@ Migration `20260922000700_shared_hangouts_and_theme.sql` adds a partial unique i
 
 The shared `HangoutShell` supplies the compact back/title row and Thing theme tokens. Same Brain keeps its existing scoring and reveal behavior while using the shell, whitespace-led layout, large answer targets and themed selection/progress accents.
 
+## Cancel and abandon
+
+Every open Hangout exposes a secondary Cancel/End action. `abandon_hangout` locks the Hangout, accepts either active Thing member, changes only `setup`, `waiting`, `ready` or `active` to `abandoned`, and is idempotent after abandonment. Completed sessions are immutable. Partial rounds and answers remain for audit/debugging, but no `hangout_results` row is created, so abandonment never affects stats, streaks, activity or KitKat unlock.
+
+Both clients poll the authoritative snapshot every 2.5 seconds. When either member abandons, the other returns to the canonical Thing page and the partial unique index immediately permits a new Hangout.
+
+## Shared engine pattern
+
+Know Me and This or That reuse `hangout_rounds`, private `hangout_answers`, the same `pending → answering → revealed` lifecycle and one shared set of eight server-selected prompts. The second answer reveals atomically; before that each snapshot contains only the caller's own answer. Their start and advance operations are idempotent and the final advance writes one durable result before releasing the Thing.
+
+Hot also uses the common rounds/answers tables, with a stored `hangouts.context`, per-round level and private escalation tables. Runtime prompt selection is server-side, active-only, excludes prompts already used in the session and accepts only `both` plus the stored `same_place`/`apart` context.
+
 ## Thing Home and lifecycle
 
 `things.color_key` stores one of eight closed palette keys. Either active member can change it through `update_thing_color`; direct table mutation remains blocked. `end_thing` locks the Thing, accepts calls only from members, is idempotent once disconnected, preserves all rows and abandons unfinished Hangouts. A disconnected Thing remains readable under Past Things and cannot create new Hangouts.
@@ -26,10 +38,12 @@ Active Home shows the shared Charm/color/names, Start a Hangout, the functional 
 
 ## Tables
 
-- `hangouts`: Thing, game type, lifecycle state, optional shared Hot level/mode, timestamps and reserved result JSON.
+- `hangouts`: Thing, game type, lifecycle state, Hot context/current level/gate, timestamps and compact result JSON.
 - `hangout_members`: the exact two Thing participants plus private-batch readiness.
 - `hot_consents`: each member's own maximum level. Raw rows are selectable only by their owner.
 - `hot_deck_cards`: private Our Deck cards with deck/drawn/discard state. Direct selection exposes only a member's own cards.
+- `hangout_rounds` / `hangout_answers` / `hangout_results`: shared engine rounds, private answers and completed-only results.
+- `hangout_level_gates` / `hangout_level_votes`: resolved gates and private per-member Hot votes; clients cannot select either table.
 
 ## RPC boundary
 
@@ -37,19 +51,21 @@ Active Home shows the shared Charm/color/names, Start a Hangout, the functional 
 - `end_thing(thing_id)`
 - `hot_setup_snapshot(thing_id)`
 - `set_hot_consent(thing_id, level)`
-- `create_hangout(thing_id, game_type, hot_mode)`
+- `create_hangout(thing_id, game_type, hot_mode, context)`
+- `join_hangout(hangout_id)` / `abandon_hangout(hangout_id)`
 - `hangout_snapshot(hangout_id)`
+- engine-specific start, snapshot, submit, advance and complete RPCs documented in the engine pages
 - `add_hot_deck_card(hangout_id, content)`
 - `ready_hot_batch(hangout_id)`
 
 All mutators derive the account from Supabase Auth, lock the parent Thing/Hangout where state can race, validate closed values in PostgreSQL and require membership. `hangout_snapshot` reports counts/readiness but never card content or `created_by`.
 
-## Hot and Our Deck
+## Hot and legacy Our Deck
 
-Flirty, Bold and Spicy map to an ordered server-side level. The shared level exists only after both people choose and is the lower choice. The snapshot does not name whose choice established it. Our Deck can be created only while the shared level is Spicy. Lowering consent abandons unfinished Our Deck setups immediately.
+The existing private Our Deck batch foundation remains compatible: it still requires the legacy shared Spicy consent, hides card authors/content from the other member and is abandoned if consent drops. New standard Hot sessions use the context/escalation flow in [Hot V1](hot.md); they always start Flirty and never read legacy upfront limits.
 
-Each Our Deck participant can submit exactly three private cards and mark their batch ready. Once both batches are ready the Hangout becomes `ready`. Card drawing, randomization, discard reuse, batch renewal, keep-going/skip/stop controls, Know Me, This or That and full Hot gameplay are intentionally deferred; the stored card-state and lifecycle fields support that next step.
+Each Our Deck participant can submit exactly three private cards and mark their batch ready. Once both batches are ready the Hangout becomes `ready`. Card drawing, randomization, discard reuse and batch renewal remain deferred.
 
 ## Deployment
 
-Apply migrations 005, 006 and 007 once in order, then deploy the matching application commit. They add no environment variables, Auth redirects, email-template changes, service key or Realtime publication.
+Apply migrations 005, 006, 007 and 008 once in order, then deploy the matching application commit. Migration 008 adds no environment variables, Auth redirects, service key or Realtime publication.

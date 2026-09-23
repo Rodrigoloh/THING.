@@ -81,6 +81,16 @@ test('canonical Thing CTA reflects incoming, waiting and active shared Hangouts'
   const playing = render(ThingScreen, { result: { ok: true, data: { ...base, active_hangout: { ...session, state: 'active', current_user_joined: true, other_user_joined: true } } } });
   assert.match(playing, /in progress/); assert.match(playing, /Continue Hangout/);
 });
+test('unified Thing activity summarizes every completed engine without prompt content', () => {
+  const recent = [
+    { id: 'k', game_type: 'know_me', state: 'complete', created_at: '2030-01-01T00:00:00Z', completed_at: '2030-01-01T01:00:00Z', result: { rounds: 8, correct_predictions: 6 }, souvenir_keys: [] },
+    { id: 't', game_type: 'this_or_that', state: 'complete', created_at: '2030-01-02T00:00:00Z', completed_at: '2030-01-02T01:00:00Z', result: { rounds: 8, agreements: 5, agreement_rate: 0.625 }, souvenir_keys: [] },
+    { id: 'h', game_type: 'hot', state: 'complete', created_at: '2030-01-03T00:00:00Z', completed_at: '2030-01-03T01:00:00Z', result: { prompts_completed: 9, highest_level: 'spicy' }, souvenir_keys: [] },
+  ];
+  const html = render(ThingScreen, { result: { ok: true, data: { ...joined, status: 'active', charm_key: 'moon', recent_hangouts: recent } } });
+  assert.match(html, /6 \/ 8 predictions/); assert.match(html, /5 \/ 8 agreed/); assert.match(html, /9 prompts · reached spicy/);
+  assert.doesNotMatch(html, /secret prompt|option_a|prompt_en/i);
+});
 test('disconnected Things are preserved as past and cannot start Hangouts', () => {
   const disconnected = { ...joined, status: 'disconnected', charm_key: 'moon' };
   const list = render(ThingsScreen, { result: { ok: true, data: [disconnected] } });
