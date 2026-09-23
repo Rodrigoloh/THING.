@@ -21,6 +21,6 @@ export type SpaceSnapshot = {
   };
   know_me: { predictions: number; correct: number; accuracy: number; best_session_rate: number };
   this_or_that: { rounds: number; agreements: number; agreement_rate: number };
-  hot: { hangouts: number; spicy_hangouts: number; highest_level: import('@/features/hangouts/model').HotLevel | null; kitkat_unlocked: boolean };
+  hot: { hangouts: number; spicy_hangouts: number; highest_level: import('@/features/hangouts/model').HotLevel | null; kitkat_progress: number; kitkat_unlocked: boolean };
   souvenirs: { key: SouvenirKey; unlocked_at: string; source_hangout_id: string }[];
 };

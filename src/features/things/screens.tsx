@@ -19,6 +19,7 @@ import { joinHangout } from '@/features/hangouts/actions';
 import { ThingTheme } from '@/components/thing/thing-theme';
 import type { SpaceSnapshot } from '@/features/space/model';
 import { CharmIcon, thingDisplayName } from '@/components/thing/charm-icon';
+import { getSouvenir } from '@/lib/souvenirs';
 
 const button = 'min-h-14 w-full rounded-[18px] bg-accent px-5 py-4 font-semibold text-[#171717] disabled:opacity-50';
 const secondary = 'min-h-12 rounded-[18px] border border-border px-5 py-3 disabled:opacity-50';
@@ -86,8 +87,6 @@ export function ThingsScreen({ result }: { result: Result<ThingSnapshot[]> }) {
   </Screen>;
 }
 
-const souvenirLabels: Record<string, string> = { FIRST_THOUGHT: 'FIRST THOUGHT', SAME_BRAIN: '★ SAME BRAIN', LOCKED_IN: '★★ LOCKED IN', PERFECT_SYNC: '100%' };
-
 function RecentActivity({ thing }: { thing: ThingSnapshot }) {
   const { locale } = useLocale();
   const c = useCopy();
@@ -100,7 +99,7 @@ function RecentActivity({ thing }: { thing: ThingSnapshot }) {
         {item.result?.correct_predictions !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.correct_predictions} / {item.result.rounds ?? 8} predictions</p>}
         {item.result?.agreements !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.agreements} / {item.result.rounds ?? 8} agreed</p>}
         {item.result?.prompts_completed !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.prompts_completed} prompts · reached {item.result.highest_level}</p>}
-        {item.souvenir_keys.map((key) => <span key={key} className="mt-2 inline-block rotate-[-1deg] border border-[var(--thing-accent-border)] bg-[var(--thing-primary-soft)] px-2 py-1 text-xs font-bold">{souvenirLabels[key] ?? key}</span>)}</div>
+        {item.souvenir_keys.map((key) => <span key={key} className="mt-2 inline-block rotate-[-1deg] border border-[var(--thing-accent-border)] bg-[var(--thing-primary-soft)] px-2 py-1 text-xs font-bold">{getSouvenir(key)?.fallbackLabel ?? key}</span>)}</div>
       <div className="text-right">{item.result?.match_rate !== undefined && <strong className="thing-accent-text block text-2xl">{Math.round(item.result.match_rate * 100)}%</strong>}{item.result?.agreement_rate !== undefined && <strong className="thing-accent-text block text-2xl">{Math.round(item.result.agreement_rate * 100)}%</strong>}<span className="text-xs text-muted">{new Date(item.completed_at ?? item.created_at).toLocaleDateString(locale)}</span></div>
     </li>)}</ul> : <div className="border-y border-dashed border-border py-6"><p className="font-semibold">{c.nothingYet}</p><p className="text-sm text-muted">{c.makeSomething}</p></div>}
   </section>;

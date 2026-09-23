@@ -30,6 +30,8 @@ export type Thing = {
   request_id: string | null;
   color_key: ThingColor;
   color_source: 'charm' | 'manual';
+  kitkat_discovered_at: string | null;
+  kitkat_progress: number;
 };
 
 export type ThingMember = {
@@ -62,8 +64,8 @@ export type Database = {
       };
       things: {
         Row: Thing;
-        Insert: { id?: string; created_by: string; nickname?: string | null; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null; color_key?: ThingColor; color_source?: 'charm' | 'manual' };
-        Update: { nickname?: string | null; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number; color_key?: ThingColor; color_source?: 'charm' | 'manual' };
+        Insert: { id?: string; created_by: string; nickname?: string | null; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null; color_key?: ThingColor; color_source?: 'charm' | 'manual'; kitkat_discovered_at?: string | null; kitkat_progress?: number };
+        Update: { nickname?: string | null; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number; color_key?: ThingColor; color_source?: 'charm' | 'manual'; kitkat_discovered_at?: string | null; kitkat_progress?: number };
         Relationships: [];
       };
       thing_members: {

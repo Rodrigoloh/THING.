@@ -51,7 +51,7 @@ export type ChoiceSnapshot = {
 export type HotResult = { prompts_completed: number; highest_level: HotLevel; context: HotContext; reached_spicy: boolean; reached_kitkat: boolean };
 export type HotSnapshot = {
   id: string; thing_id: string; state: HangoutSnapshot['state']; color_key: import('@/features/things/model').ThingColor;
-  context: HotContext; current_level: HotLevel; notice: 'level_up' | 'staying_here' | null; kitkat_unlocked: boolean; kitkat_first_discovery: boolean; completed_prompts: number;
+  context: HotContext; current_level: HotLevel; notice: 'level_up' | 'staying_here' | null; kitkat_unlocked: boolean; kitkat_progress: number; kitkat_first_discovery: boolean; completed_prompts: number;
   members: { user_id: string; display_name: string }[];
   gate: { target_level: Exclude<HotLevel, 'flirty'>; own_vote: boolean | null; votes_cast: number } | null;
   round: null | { id: string; number: number; state: 'answering' | 'revealed'; level: HotLevel; skipped: boolean; round_type: 'reveal' | 'guess' | 'move'; reaction_type: 'respond' | 'use_it' | 'move'; prompt_id: string;

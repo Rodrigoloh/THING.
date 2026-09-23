@@ -364,7 +364,7 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       assert.equal((await rpc(a, 'hangout_snapshot', [ourDeck])).state, 'abandoned');
       await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck', 'same_place']), /our_deck_unavailable/);
     });
-    await t.test('Hot V1 stores context, escalates mutually, skips safely and unlocks KitKat after three Spicy completions', async () => {
+    await t.test('Hot V1 cycles KitKat after three completed Hangouts that reached Spicy', async () => {
       async function answerCurrent(id, advance = true) {
         let snapshot = await rpc(a, 'hot_snapshot', [id]);
         const roundId = snapshot.round.id;
@@ -419,6 +419,7 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       assert.equal(skippedView.current_level, 'flirty'); assert.equal(skippedView.notice, 'staying_here');
       await rpc(joined.partner, 'abandon_hangout', [skipped.id]);
       assert.equal((await admin.query("select count(*)::int n from public.hangout_results r join public.hangouts h on h.id=r.hangout_id where h.thing_id=$1 and r.game_type='hot'", [joined.id])).rows[0].n, 0);
+      assert.equal((await admin.query('select kitkat_progress from public.things where id=$1', [joined.id])).rows[0].kitkat_progress, 0);
 
       const completedHotPromptSets = [];
       for (const [sessionIndex, context] of ['same_place', 'apart', 'same_place'].entries()) {
@@ -430,6 +431,7 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
         } else await answerCurrent(id, false);
         const result = await rpc(a, 'complete_hot', [id]);
         assert.equal(result.highest_level, 'spicy'); assert.equal(result.context, context); assert.equal(result.reached_spicy, true); assert.equal(result.reached_kitkat, false);
+        assert.equal((await admin.query('select kitkat_progress from public.things where id=$1', [joined.id])).rows[0].kitkat_progress, sessionIndex + 1);
         const usedContexts = (await admin.query('select distinct p.context from public.hangout_rounds r join public.game_prompts p on p.id=r.prompt_id where r.hangout_id=$1', [id])).rows.map((row) => row.context);
         assert.ok(usedContexts.every((value) => value === 'both' || value === context));
         assert.equal((await admin.query('select count(*)=count(distinct prompt_id) unique_prompts from public.hangout_rounds where hangout_id=$1', [id])).rows[0].unique_prompts, true);
@@ -441,27 +443,46 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
         completedHotPromptSets.push(promptSet);
       }
       let space = await rpc(a, 'space_snapshot', [joined.id]);
-      assert.equal(space.hot.spicy_hangouts, 3); assert.equal(space.hot.kitkat_unlocked, true);
+      assert.equal(space.hot.spicy_hangouts, 3); assert.equal(space.hot.kitkat_progress, 3); assert.equal(space.hot.kitkat_unlocked, true);
       assert.ok(space.souvenirs.some((item) => item.key === 'HEAT_CHECK'));
       assert.ok(space.souvenirs.some((item) => item.key === 'TURNED_UP'));
       assert.ok(space.souvenirs.some((item) => item.key === 'AFTER_HOURS'));
       assert.equal(space.souvenirs.some((item) => item.key === 'KITKAT'), false);
 
+      const declined = await reachSpicy('same_place');
+      await answerCurrent(declined); await answerCurrent(declined);
+      let gate = await rpc(a, 'hot_snapshot', [declined]);
+      assert.equal(gate.gate.target_level, 'kitkat'); assert.equal(gate.kitkat_progress, 3);
+      await rpc(a, 'submit_hot_escalation', [declined, true]);
+      await rpc(joined.partner, 'submit_hot_escalation', [declined, false]);
+      assert.equal((await admin.query('select kitkat_progress from public.things where id=$1', [joined.id])).rows[0].kitkat_progress, 3);
+      await rpc(a, 'abandon_hangout', [declined]);
+
       const kitkat = await reachSpicy('same_place');
       await answerCurrent(kitkat); await answerCurrent(kitkat);
-      let gate = await rpc(a, 'hot_snapshot', [kitkat]);
-      assert.equal(gate.gate.target_level, 'kitkat'); assert.equal(gate.kitkat_unlocked, true);
+      gate = await rpc(a, 'hot_snapshot', [kitkat]);
+      assert.equal(gate.gate.target_level, 'kitkat'); assert.equal(gate.kitkat_unlocked, true); assert.equal(gate.kitkat_progress, 3);
       await acceptGate(kitkat, 'kitkat');
-      assert.equal((await rpc(a, 'hot_snapshot', [kitkat])).kitkat_first_discovery, true);
+      const entered = await rpc(a, 'hot_snapshot', [kitkat]);
+      assert.equal(entered.kitkat_first_discovery, true); assert.equal(entered.kitkat_progress, 0); assert.equal(entered.kitkat_unlocked, false);
       assert.ok((await rpc(a, 'space_snapshot', [joined.id])).souvenirs.some((item) => item.key === 'KITKAT'));
       await answerCurrent(kitkat, false);
       const final = await rpc(joined.partner, 'complete_hot', [kitkat]);
       assert.equal(final.highest_level, 'kitkat'); assert.equal(final.reached_kitkat, true);
       space = await rpc(a, 'space_snapshot', [joined.id]);
-      assert.equal(space.hot.highest_level, 'kitkat'); assert.equal(space.hot.hangouts, 4);
+      assert.equal(space.hot.highest_level, 'kitkat'); assert.equal(space.hot.hangouts, 4); assert.equal(space.hot.kitkat_progress, 0); assert.equal(space.hot.kitkat_unlocked, false);
       assert.ok((await admin.query('select kitkat_discovered_at from public.things where id=$1', [joined.id])).rows[0].kitkat_discovered_at);
       const kitkatPrompts = (await admin.query("select p.stable_id from public.hangout_rounds r join public.game_prompts p on p.id=r.prompt_id where r.hangout_id=$1 and r.level='kitkat'", [kitkat])).rows;
       assert.ok(kitkatPrompts.length > 0); assert.ok(kitkatPrompts.every((row) => row.stable_id.startsWith('HT-K-')));
+      for (let cycleProgress = 1; cycleProgress <= 3; cycleProgress++) {
+        const next = await reachSpicy(cycleProgress % 2 ? 'apart' : 'same_place');
+        await answerCurrent(next, false);
+        await rpc(a, 'complete_hot', [next]);
+        const cycle = await rpc(a, 'space_snapshot', [joined.id]);
+        assert.equal(cycle.hot.kitkat_progress, cycleProgress);
+        assert.equal(cycle.hot.kitkat_unlocked, cycleProgress === 3);
+        assert.ok(cycle.souvenirs.some((item) => item.key === 'KITKAT'));
+      }
       await assert.rejects(rpc(joined.outsider, 'hot_snapshot', [kitkat]), /hangout_unavailable/);
       await assert.rejects(joined.outsider.client.query('select * from public.hangout_level_votes'), /permission denied/);
       assert.equal((await joined.outsider.client.query('select * from public.hot_reveals')).rowCount, 0);
