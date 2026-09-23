@@ -234,6 +234,91 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       assert.equal((await rpc(a, 'hangout_snapshot', [ourDeck])).state, 'abandoned');
       await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck']), /our_deck_unavailable/);
     });
+    await t.test('Same Brain keeps answers private, persists results and builds Space', async () => {
+      async function playSession(matchCount) {
+        const hangoutId = await rpc(a, 'create_hangout', [joined.id, 'same_brain', null]);
+        await rpc(a, 'start_same_brain', [hangoutId]);
+        const rounds = (await admin.query('select id,prompt_id,round_number from public.hangout_rounds where hangout_id=$1 order by round_number', [hangoutId])).rows;
+        assert.equal(rounds.length, 8);
+        assert.equal(new Set(rounds.map((round) => round.prompt_id)).size, 8);
+        for (const [index, expected] of rounds.entries()) {
+          let snapshot = await rpc(a, 'same_brain_snapshot', [hangoutId]);
+          assert.equal(snapshot.round.id, expected.id); assert.equal(snapshot.round.number, index + 1);
+          assert.equal(snapshot.round.answers.length, 0);
+          if (index === 1) {
+            await Promise.all([
+              rpc(a, 'submit_same_brain_answer', [hangoutId, expected.id, 'a']),
+              rpc(joined.partner, 'submit_same_brain_answer', [hangoutId, expected.id, index < matchCount ? 'a' : 'b']),
+            ]);
+            await assert.rejects(rpc(a, 'submit_same_brain_answer', [hangoutId, expected.id, 'b']), /round_unavailable/);
+            snapshot = await rpc(a, 'same_brain_snapshot', [hangoutId]);
+            assert.equal(snapshot.round.state, 'revealed'); assert.equal(snapshot.round.answers.length, 2);
+            if (index < 7) await rpc(a, 'advance_same_brain_round', [hangoutId]);
+            continue;
+          }
+          await rpc(a, 'submit_same_brain_answer', [hangoutId, expected.id, 'a']);
+          await assert.rejects(rpc(a, 'submit_same_brain_answer', [hangoutId, expected.id, 'b']), /answer_locked/);
+          if (index === 0) {
+            assert.equal((await joined.partner.client.query('select * from public.hangout_answers where round_id=$1', [expected.id])).rowCount, 0);
+            snapshot = await rpc(joined.partner, 'same_brain_snapshot', [hangoutId]);
+            assert.equal(snapshot.round.own_answer, null); assert.equal(snapshot.round.answers.length, 0);
+            assert.doesNotMatch(JSON.stringify(snapshot), /"own_answer":"a"/);
+            await assert.rejects(rpc(joined.outsider, 'submit_same_brain_answer', [hangoutId, expected.id, 'a']), /hangout_unavailable/);
+          }
+          await rpc(joined.partner, 'submit_same_brain_answer', [hangoutId, expected.id, index < matchCount ? 'a' : 'b']);
+          snapshot = await rpc(a, 'same_brain_snapshot', [hangoutId]);
+          assert.equal(snapshot.round.state, 'revealed'); assert.equal(snapshot.round.answers.length, 2);
+          assert.equal(snapshot.round.answers[0].answer_key, 'a');
+          if (index < 7) await rpc(a, 'advance_same_brain_round', [hangoutId]);
+          else await rpc(joined.partner, 'advance_same_brain_round', [hangoutId]);
+        }
+        const complete = await rpc(a, 'same_brain_snapshot', [hangoutId]);
+        assert.equal(complete.state, 'complete'); assert.equal(complete.result.matches, matchCount);
+        assert.equal(complete.result.rounds, 8); assert.equal(Number(complete.result.match_rate), matchCount / 8);
+        assert.equal(complete.result.best_match_streak, matchCount);
+        assert.equal((await admin.query('select count(*)::int n from public.hangout_results where hangout_id=$1', [hangoutId])).rows[0].n, 1);
+        await assert.rejects(rpc(a, 'submit_same_brain_answer', [hangoutId, rounds[7].id, 'a']), /hangout_unavailable/);
+        await rpc(a, 'advance_same_brain_round', [hangoutId]);
+        assert.deepEqual(await rpc(a, 'complete_same_brain', [hangoutId]), complete.result);
+        return hangoutId;
+      }
+
+      const first = await playSession(3);
+      let space = await rpc(a, 'space_snapshot', [joined.id]);
+      assert.equal(space.current_streak, 1); assert.equal(space.same_brain.hangouts, 1);
+      assert.deepEqual(space.souvenirs.map((item) => item.key).sort(), ['FIRST_THOUGHT', 'SAME_BRAIN']);
+
+      const locked = await playSession(5);
+      space = await rpc(joined.partner, 'space_snapshot', [joined.id]);
+      assert.equal(space.current_streak, 1);
+      assert.ok(space.souvenirs.some((item) => item.key === 'LOCKED_IN'));
+      await admin.query("update public.hangouts set completed_at=(now() at time zone 'UTC')::date - interval '1 day' where id=$1", [first]);
+      await admin.query("update public.hangout_results set completed_at=(now() at time zone 'UTC')::date - interval '1 day' where hangout_id=$1", [first]);
+      space = await rpc(a, 'space_snapshot', [joined.id]);
+      assert.equal(space.current_streak, 2);
+
+      const perfect = await playSession(8);
+      await admin.query("update public.hangouts set completed_at=(now() at time zone 'UTC')::date - interval '4 days' where id=$1", [first]);
+      await admin.query("update public.hangouts set completed_at=(now() at time zone 'UTC')::date - interval '3 days' where id=$1", [locked]);
+      space = await rpc(a, 'space_snapshot', [joined.id]);
+      assert.equal(space.current_streak, 1); assert.equal(space.best_streak, 2);
+      assert.equal(space.same_brain.hangouts, 3); assert.equal(space.same_brain.rounds, 24); assert.equal(space.same_brain.matches, 16);
+      assert.equal(Number(space.same_brain.lifetime_match_rate), 16 / 24);
+      assert.equal(Number(space.same_brain.best_session_match_rate), 1); assert.equal(space.same_brain.best_match_streak, 8);
+      assert.deepEqual(space.souvenirs.map((item) => item.key).sort(), ['FIRST_THOUGHT', 'LOCKED_IN', 'PERFECT_SYNC', 'SAME_BRAIN']);
+      assert.equal((await admin.query('select count(*)::int n from public.thing_souvenirs where thing_id=$1', [joined.id])).rows[0].n, 4);
+      assert.equal((await rpc(a, 'complete_same_brain', [perfect])).matches, 8);
+      assert.equal((await admin.query('select count(*)::int n from public.thing_souvenirs where thing_id=$1', [joined.id])).rows[0].n, 4);
+
+      const incomplete = await rpc(a, 'create_hangout', [joined.id, 'same_brain', null]);
+      await rpc(a, 'start_same_brain', [incomplete]);
+      assert.equal((await rpc(a, 'space_snapshot', [joined.id])).same_brain.hangouts, 3);
+      await assert.rejects(rpc(joined.outsider, 'same_brain_snapshot', [incomplete]), /hangout_unavailable/);
+      await assert.rejects(rpc(joined.outsider, 'space_snapshot', [joined.id]), /thing_unavailable/);
+      for (const table of ['hangout_rounds', 'hangout_answers', 'hangout_results', 'thing_souvenirs']) {
+        assert.equal((await joined.outsider.client.query(`select * from public.${table}`)).rowCount, 0);
+      }
+    });
     await t.test('ending is member-only, idempotent, preserves history and blocks new Hangouts', async () => {
       await assert.rejects(rpc(joined.outsider, 'end_thing', [joined.id]), /thing_unavailable/);
       await rpc(joined.partner, 'end_thing', [joined.id]);
@@ -335,6 +420,6 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
     if (admin) await admin.end();
     await cluster.stop();
     assert.ok(directory.startsWith(join(testRoot, 'thing-test-')), 'Only remove this temporary test cluster');
-    await rm(directory, { recursive: true, force: true, maxRetries: 50, retryDelay: 200 });
+    await rm(directory, { recursive: true, force: true, maxRetries: 100, retryDelay: 250 });
   }
 });

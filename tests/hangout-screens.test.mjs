@@ -9,7 +9,7 @@ import { LocaleProvider } from '../src/lib/i18n/provider.tsx';
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier === './actions' && context.parentURL?.endsWith('/features/hangouts/screens.tsx')) {
-      const source = ['addHotCard', 'createHangout', 'readyHotBatch', 'setHotConsent'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
+      const source = ['addHotCard', 'advanceSameBrain', 'createHangout', 'loadSameBrain', 'readyHotBatch', 'setHotConsent', 'startSameBrain', 'submitSameBrainAnswer'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
       return { url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true };
     }
     return next(specifier, context);
@@ -54,4 +54,19 @@ test('Our Deck setup shows private batch counts without author identity', () => 
   assert.match(html, /their cards: 3\/3/);
   assert.match(html, /no names attached/);
   assert.doesNotMatch(html, /created_by|author/i);
+});
+
+test('Same Brain renders private answering, reveal and final result states', () => {
+  const base = {
+    id: 'hangout-2', thing_id: thing.id, game_type: 'same_brain', state: 'active', hot_level: null, hot_mode: null,
+    created_at: '2030-01-01T00:00:00Z', started_at: '2030-01-01T00:00:01Z', completed_at: null,
+    members: [{ display_name: 'Alex' }, { display_name: 'Sam' }], own_card_count: 0, partner_card_count: 0, own_batch_ready: false, both_batches_ready: false,
+  };
+  const prompt = { id: 'round-1', number: 1, state: 'answering', prompt_en: 'Pick one.', prompt_es: 'Elige una.', option_a_en: 'Tea', option_a_es: 'Té', option_b_en: 'Coffee', option_b_es: 'Café', answer_count: 0, own_answer: null, answers: [] };
+  const answering = render(HangoutDetailScreen, { result: { ok: true, data: base }, sameBrainResult: { ok: true, data: { id: base.id, thing_id: thing.id, state: 'active', members: base.members, round: prompt, result: null } } });
+  assert.match(answering, /round 1 \/ 8/); assert.match(answering, /Tea/); assert.match(answering, /Coffee/); assert.doesNotMatch(answering, /Sam.*picked/);
+  const revealed = render(HangoutDetailScreen, { result: { ok: true, data: base }, sameBrainResult: { ok: true, data: { id: base.id, thing_id: thing.id, state: 'active', members: base.members, round: { ...prompt, state: 'revealed', answer_count: 2, own_answer: 'a', answers: [{ answer_key: 'a', is_self: true, display_name: 'Alex' }, { answer_key: 'a', is_self: false, display_name: 'Sam' }] }, result: null } } });
+  assert.match(revealed, /MATCH/); assert.match(revealed, /same brain\./); assert.match(revealed, /you picked/); assert.match(revealed, /they picked/);
+  const complete = render(HangoutDetailScreen, { result: { ok: true, data: { ...base, state: 'complete', completed_at: '2030-01-01T01:00:00Z' } }, sameBrainResult: { ok: true, data: { id: base.id, thing_id: thing.id, state: 'complete', members: base.members, round: null, result: { matches: 6, rounds: 8, match_rate: 0.75, best_match_streak: 3 } } } });
+  assert.match(complete, /6 \/ 8/); assert.match(complete, /75% matched/); assert.match(complete, /best streak: 3/); assert.match(complete, /see Space/);
 });

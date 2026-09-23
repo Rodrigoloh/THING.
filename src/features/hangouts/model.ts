@@ -26,3 +26,40 @@ export type HangoutSnapshot = {
   own_batch_ready: boolean;
   both_batches_ready: boolean;
 };
+
+export type SameBrainAnswer = {
+  answer_key: 'a' | 'b';
+  is_self: boolean;
+  display_name: string;
+};
+
+export type SameBrainRound = {
+  id: string;
+  number: number;
+  state: 'answering' | 'revealed';
+  prompt_en: string;
+  prompt_es: string;
+  option_a_en: string;
+  option_a_es: string;
+  option_b_en: string;
+  option_b_es: string;
+  answer_count: number;
+  own_answer: 'a' | 'b' | null;
+  answers: SameBrainAnswer[];
+};
+
+export type SameBrainResult = {
+  matches: number;
+  rounds: number;
+  match_rate: number;
+  best_match_streak: number;
+};
+
+export type SameBrainSnapshot = {
+  id: string;
+  thing_id: string;
+  state: HangoutSnapshot['state'];
+  members: { display_name: string }[];
+  round: SameBrainRound | null;
+  result: SameBrainResult | null;
+};

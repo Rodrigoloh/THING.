@@ -13,10 +13,11 @@ Apply migrations in order, once each, using the Supabase SQL Editor or your usua
 3. `20260922000300_thing_flow.sql` — original state transitions, membership seats, private Charm choices, RPC-only writes, invite privacy and RPCs.
 4. `20260922000400_invites_password_charm_refine.sql` — six-character invite generation, account lookup throttling, current Charm proposals and proposal RPCs.
 5. `20260922000500_thing_home_hangouts_foundation.sql` — shared Thing colors, soft ending, Hangouts, Hot consent and private Our Deck batches.
+6. `20260922000600_same_brain_results_space.sql` — Same Brain prompts/rounds/private answers/results, souvenirs and Space snapshot.
 
 Migration 004 preserves active/disconnected Things and legacy choice history. For a pending Charm Thing with an unresolved legacy choice, it promotes one current-round choice into the initial proposal. Existing invite codes remain valid; only newly generated and renewed codes use the short alphabet.
 
-Do not deploy the updated UI before migration 005. Keep the existing Supabase URL/publishable-key settings; no service-role key or Realtime publication is required. Password signup/recovery requires the Auth configuration described in the README. Hosted migrations are not applied by tests.
+Do not deploy the updated UI before migrations 005 and 006. Keep the existing Supabase URL/publishable-key settings; no service-role key or Realtime publication is required. Password signup/recovery requires the Auth configuration described in the README. Hosted migrations are not applied by tests.
 
 ## Data and concurrency
 
@@ -62,13 +63,13 @@ Pending detail and list screens refresh every three seconds while visible; recon
 
 `npm test` runs the existing unit tests, invite validation tests and a real temporary PostgreSQL cluster using `embedded-postgres`. No hosted credentials or production data are used. Dependencies need install scripts enabled. On Windows an execution sandbox may block `initdb`; run the test command in a normal terminal in that case. The runner exits after all tests complete (`--test-force-exit`) because the embedded cluster library can retain Windows process/IPC handles after shutdown. The suite first awaits all connections closing, cluster stop, and deletion of its temporary directory; this flag does not skip assertions or cleanup.
 
-The database suite applies all five migrations, creates minimal Supabase Auth/Storage metadata and JWT-role shims, and exercises the actual SQL functions/RLS. Two separate TCP connections are forced to wait on a locked row before releasing the race barrier. Coverage includes invitations, Charm proposals, shared colors, member-only soft ending, Hangout access, Hot consent lowering, Our Deck privacy/batches, activation, guest and missing-profile rejection.
+The database suite applies all six migrations, creates minimal Supabase Auth/Storage metadata and JWT-role shims, and exercises the actual SQL functions/RLS. Coverage includes invitations, Charm proposals, shared colors, member-only soft ending, Hangout access, Hot consent, Our Deck privacy/batches, Same Brain privacy/results, Space aggregation, activation, guest and missing-profile rejection.
 
 Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. `node scripts/check-routes.mjs` checks the running production server's unauthenticated routes and invite continuation cookie. Auth/Storage service behavior and browser end-to-end login still require the hosted acceptance below; the database shims are not the hosted Supabase services.
 
 ## Hosted acceptance (two browser sessions)
 
-1. Apply migrations 004 and 005 if missing, configure password email redirects/templates, then deploy the code.
+1. Apply migrations 004, 005 and 006 if missing, configure password email redirects/templates, then deploy the code.
 2. Create and confirm a new password account, create its profile, sign out, and sign in again. Wrong credentials must show safe copy. Verify the OTP fallback separately.
 3. For an account originally created through OTP, set a password in Account settings. Sign in with it and confirm the same Auth ID, profile, avatar, Things and memberships remain.
 4. Request password recovery. The email must return through `/auth/callback` to `/auth/update-password`; after changing it, the same account data must remain.

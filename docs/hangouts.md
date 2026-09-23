@@ -1,12 +1,20 @@
 # Hangout foundation
 
-Migration `20260922000500_thing_home_hangouts_foundation.sql` adds the durable entry/setup layer for Hangouts without pretending the four game engines are complete.
+Migration `20260922000500_thing_home_hangouts_foundation.sql` adds the durable entry/setup layer. Additive migration `20260922000600_same_brain_results_space.sql` completes Same Brain while leaving the other three engines at their existing foundation states.
+
+## Same Brain
+
+`start_same_brain` selects eight distinct active, non-adult prompts on the server and creates numbered rounds once. Every round moves `pending → answering → revealed`. Each participant can submit one `a`/`b` answer; the Hangout row lock and unique `(round_id, user_id)` constraint make simultaneous and repeated requests safe. The second answer reveals both selections atomically. `same_brain_snapshot` returns only the caller's answer until reveal, then returns both answers. Refreshing or reopening rebuilds the UI from this snapshot.
+
+After a revealed round, `advance_same_brain_round` activates the next one. Advancing round eight completes the Hangout, writes `hangout_results`, copies the compact result to the existing `hangouts.result`, and unlocks qualifying souvenirs. The stored result includes raw matches/rounds plus `match_rate` and `best_match_streak`; no winner or compatibility score is calculated.
+
+The client polls every 2.5 seconds only while it is waiting/revealing, with an immediate refresh when the tab becomes visible. Realtime is unnecessary for this MVP.
 
 ## Thing Home and lifecycle
 
 `things.color_key` stores one of eight closed palette keys. Either active member can change it through `update_thing_color`; direct table mutation remains blocked. `end_thing` locks the Thing, accepts calls only from members, is idempotent once disconnected, preserves all rows and abandons unfinished Hangouts. A disconnected Thing remains readable under Past Things and cannot create new Hangouts.
 
-Active Home shows the shared Charm/color/names, Start a Hangout, the existing Space placeholder, up to five real recent Hangouts and a compact settings menu. No sample activity is generated.
+Active Home shows the shared Charm/color/names, Start a Hangout, the functional Space entry, up to five real recent Hangouts and a compact settings menu. No sample activity is generated.
 
 ## Tables
 
@@ -32,8 +40,8 @@ All mutators derive the account from Supabase Auth, lock the parent Thing/Hangou
 
 Flirty, Bold and Spicy map to an ordered server-side level. The shared level exists only after both people choose and is the lower choice. The snapshot does not name whose choice established it. Our Deck can be created only while the shared level is Spicy. Lowering consent abandons unfinished Our Deck setups immediately.
 
-Each Our Deck participant can submit exactly three private cards and mark their batch ready. Once both batches are ready the Hangout becomes `ready`. Card drawing, randomization, discard reuse, batch renewal, keep-going/skip/stop controls and the four full play/result engines are intentionally deferred; the stored card-state and lifecycle fields support that next step.
+Each Our Deck participant can submit exactly three private cards and mark their batch ready. Once both batches are ready the Hangout becomes `ready`. Card drawing, randomization, discard reuse, batch renewal, keep-going/skip/stop controls, Know Me, This or That and full Hot gameplay are intentionally deferred; the stored card-state and lifecycle fields support that next step.
 
 ## Deployment
 
-Apply migration 005 once after migration 004, then deploy the matching application commit. It adds no environment variables, Auth redirects, email-template changes, service key or Realtime publication.
+Apply migration 005 once after migration 004 and migration 006 once after 005, then deploy the matching application commit. They add no environment variables, Auth redirects, email-template changes, service key or Realtime publication.

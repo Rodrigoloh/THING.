@@ -9,6 +9,10 @@ export const hangoutCopy = {
     mixed: 'we’ll mix them together.', anonymous: 'no names attached.', addCard: 'add card', finishBatch: 'finish my batch',
     yourCards: 'your cards', theirCards: 'their cards', waitingBatch: 'waiting for the other batch…', batchReady: 'both batches are ready.',
     foundation: 'This Hangout is ready for its game engine.', state: 'status', retry: 'try again', busy: 'one moment…',
+    sameBrainIntro: 'Eight quick picks. Answer separately, then reveal together.', begin: 'same brain →', round: 'round',
+    waitingPartner: 'waiting for them…', answerLocked: 'answer locked.', match: 'MATCH', sameBrain: 'same brain.',
+    notThisTime: 'not this time.', youPicked: 'you picked', theyPicked: 'they picked', next: 'next one →',
+    finalLine: 'that was', matched: 'matched', bestStreak: 'best streak', seeSpace: 'see Space', backThing: 'back to Thing',
   },
   es: {
     title: 'elijan un Hangout.', back: 'volver a su Thing', same_brain: 'Same Brain', know_me: 'Know Me', this_or_that: 'This or That', hot: 'Hot',
@@ -20,5 +24,9 @@ export const hangoutCopy = {
     mixed: 'las mezclaremos.', anonymous: 'sin nombres.', addCard: 'agregar carta', finishBatch: 'terminar mi tanda',
     yourCards: 'tus cartas', theirCards: 'sus cartas', waitingBatch: 'esperando la otra tanda…', batchReady: 'las dos tandas están listas.',
     foundation: 'Este Hangout está listo para recibir su juego.', state: 'estado', retry: 'reintentar', busy: 'un momento…',
+    sameBrainIntro: 'Ocho elecciones rápidas. Respondan por separado y revelen juntos.', begin: 'same brain →', round: 'ronda',
+    waitingPartner: 'esperando a la otra persona…', answerLocked: 'respuesta guardada.', match: 'COINCIDIERON', sameBrain: 'same brain.',
+    notThisTime: 'esta vez no.', youPicked: 'elegiste', theyPicked: 'eligió', next: 'la siguiente →',
+    finalLine: 'fueron', matched: 'coincidencias', bestStreak: 'mejor racha', seeSpace: 'ver Space', backThing: 'volver al Thing',
   },
 } as const;

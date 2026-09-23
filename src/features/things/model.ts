@@ -48,7 +48,7 @@ export function browserInviteDestination() {
   const code = document.cookie.split('; ').find((part) => part.startsWith(`${inviteCookie}=`))?.slice(inviteCookie.length + 1);
   return inviteDestination(code);
 }
-export const flowErrors = ['session_required', 'profile_required', 'invite_unavailable', 'invite_expired', 'invite_used', 'invite_revoked', 'invite_rate_limited', 'thing_full', 'own_invite', 'thing_unavailable', 'proposal_changed', 'own_proposal', 'invalid_charm', 'invalid_color', 'invalid_game_type', 'invalid_hot_level', 'invalid_hot_mode', 'hot_consent_required', 'our_deck_unavailable', 'hangout_unavailable', 'invalid_card', 'batch_full', 'batch_incomplete', 'too_many_pending', 'connection_failed'] as const;
+export const flowErrors = ['session_required', 'profile_required', 'invite_unavailable', 'invite_expired', 'invite_used', 'invite_revoked', 'invite_rate_limited', 'thing_full', 'own_invite', 'thing_unavailable', 'proposal_changed', 'own_proposal', 'invalid_charm', 'invalid_color', 'invalid_game_type', 'invalid_hot_level', 'invalid_hot_mode', 'hot_consent_required', 'our_deck_unavailable', 'hangout_unavailable', 'invalid_card', 'batch_full', 'batch_incomplete', 'prompt_pack_unavailable', 'round_unavailable', 'invalid_answer', 'answer_locked', 'too_many_pending', 'connection_failed'] as const;
 export type FlowError = typeof flowErrors[number];
 export function flowError(error: unknown): FlowError {
   const message = error && typeof error === 'object' && 'message' in error ? error.message : '';

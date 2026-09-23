@@ -10,7 +10,8 @@ export type Profile = {
 };
 
 import type { ThingSnapshot, InvitePreview, InviteRpcResult, ThingColor } from '@/features/things/model';
-import type { GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup } from '@/features/hangouts/model';
+import type { GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup, SameBrainSnapshot, SameBrainResult } from '@/features/hangouts/model';
+import type { SpaceSnapshot } from '@/features/space/model';
 export type ThingStatus = "pending_invite" | "pending_charm" | "active" | "disconnected";
 export type ThingMemberRole = "creator" | "member";
 export type ThingMemberStatus = "pending" | "active" | "left";
@@ -117,6 +118,36 @@ export type Database = {
         Update: { card_state?: 'deck' | 'drawn' | 'discard'; drawn_at?: string | null };
         Relationships: [];
       };
+      game_prompts: {
+        Row: { id: string; game_type: GameType; round_type: string; prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string; mood: string; context: string; intensity: number; tags: string[]; adult: boolean; reveal_style: string; active: boolean };
+        Insert: { id?: string; game_type: GameType; round_type?: string; prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string; mood?: string; context?: string; intensity?: number; tags?: string[]; adult?: boolean; reveal_style?: string; active?: boolean };
+        Update: { active?: boolean; mood?: string; context?: string; intensity?: number; tags?: string[]; reveal_style?: string };
+        Relationships: [];
+      };
+      hangout_rounds: {
+        Row: { id: string; hangout_id: string; round_number: number; prompt_id: string; state: 'pending' | 'answering' | 'revealed'; created_at: string; revealed_at: string | null };
+        Insert: { id?: string; hangout_id: string; round_number: number; prompt_id: string; state?: 'pending' | 'answering' | 'revealed'; created_at?: string; revealed_at?: string | null };
+        Update: { state?: 'pending' | 'answering' | 'revealed'; revealed_at?: string | null };
+        Relationships: [];
+      };
+      hangout_answers: {
+        Row: { id: string; round_id: string; user_id: string; answer_key: 'a' | 'b'; answered_at: string };
+        Insert: { id?: string; round_id: string; user_id: string; answer_key: 'a' | 'b'; answered_at?: string };
+        Update: { answer_key?: 'a' | 'b' };
+        Relationships: [];
+      };
+      hangout_results: {
+        Row: { hangout_id: string; game_type: GameType; rounds_played: number; result_json: SameBrainResult | Record<string, unknown>; completed_at: string };
+        Insert: { hangout_id: string; game_type: GameType; rounds_played: number; result_json: SameBrainResult | Record<string, unknown>; completed_at?: string };
+        Update: { [_ in never]: never };
+        Relationships: [];
+      };
+      thing_souvenirs: {
+        Row: { id: string; thing_id: string; souvenir_key: 'FIRST_THOUGHT' | 'SAME_BRAIN' | 'LOCKED_IN' | 'PERFECT_SYNC'; source_hangout_id: string; unlocked_at: string; metadata_json: Record<string, unknown> };
+        Insert: { id?: string; thing_id: string; souvenir_key: 'FIRST_THOUGHT' | 'SAME_BRAIN' | 'LOCKED_IN' | 'PERFECT_SYNC'; source_hangout_id: string; unlocked_at?: string; metadata_json?: Record<string, unknown> };
+        Update: { [_ in never]: never };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -140,6 +171,12 @@ export type Database = {
       hangout_snapshot: { Args: { p_hangout_id: string }; Returns: HangoutSnapshot };
       add_hot_deck_card: { Args: { p_hangout_id: string; p_content: string }; Returns: string };
       ready_hot_batch: { Args: { p_hangout_id: string }; Returns: undefined };
+      same_brain_snapshot: { Args: { p_hangout_id: string }; Returns: SameBrainSnapshot };
+      start_same_brain: { Args: { p_hangout_id: string }; Returns: undefined };
+      submit_same_brain_answer: { Args: { p_hangout_id: string; p_round_id: string; p_answer_key: 'a' | 'b' }; Returns: undefined };
+      advance_same_brain_round: { Args: { p_hangout_id: string }; Returns: undefined };
+      complete_same_brain: { Args: { p_hangout_id: string }; Returns: SameBrainResult };
+      space_snapshot: { Args: { p_thing_id: string }; Returns: SpaceSnapshot };
       is_active_thing_member: { Args: { target_thing_id: string }; Returns: boolean };
       is_thing_creator: { Args: { target_thing_id: string }; Returns: boolean };
     };

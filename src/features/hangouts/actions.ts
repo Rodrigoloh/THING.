@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { flowError, type Result } from '@/features/things/model';
-import type { GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup } from './model';
+import type { GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup, SameBrainSnapshot } from './model';
 
 export async function loadHotSetup(thingId: string): Promise<Result<HotSetup>> {
   try {
@@ -52,5 +52,44 @@ export async function readyHotBatch(hangoutId: string): Promise<Result<null>> {
     if (error) return { ok: false, error: flowError(error) };
     revalidatePath('/thing/[thingId]/hangout/[hangoutId]', 'page');
     return { ok: true, data: null };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+
+export async function loadSameBrain(hangoutId: string): Promise<Result<SameBrainSnapshot>> {
+  try {
+    const { data, error } = await (await getSupabaseServerClient()).rpc('same_brain_snapshot', { p_hangout_id: hangoutId });
+    return error || !data ? { ok: false, error: flowError(error) } : { ok: true, data };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+
+export async function startSameBrain(hangoutId: string): Promise<Result<SameBrainSnapshot>> {
+  try {
+    const client = await getSupabaseServerClient();
+    const { error } = await client.rpc('start_same_brain', { p_hangout_id: hangoutId });
+    if (error) return { ok: false, error: flowError(error) };
+    const { data, error: snapshotError } = await client.rpc('same_brain_snapshot', { p_hangout_id: hangoutId });
+    return snapshotError || !data ? { ok: false, error: flowError(snapshotError) } : { ok: true, data };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+
+export async function submitSameBrainAnswer(hangoutId: string, roundId: string, answerKey: 'a' | 'b'): Promise<Result<SameBrainSnapshot>> {
+  try {
+    const client = await getSupabaseServerClient();
+    const { error } = await client.rpc('submit_same_brain_answer', { p_hangout_id: hangoutId, p_round_id: roundId, p_answer_key: answerKey });
+    if (error) return { ok: false, error: flowError(error) };
+    const { data, error: snapshotError } = await client.rpc('same_brain_snapshot', { p_hangout_id: hangoutId });
+    return snapshotError || !data ? { ok: false, error: flowError(snapshotError) } : { ok: true, data };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+
+export async function advanceSameBrain(hangoutId: string): Promise<Result<SameBrainSnapshot>> {
+  try {
+    const client = await getSupabaseServerClient();
+    const { error } = await client.rpc('advance_same_brain_round', { p_hangout_id: hangoutId });
+    if (error) return { ok: false, error: flowError(error) };
+    revalidatePath('/thing/[thingId]/hangout/[hangoutId]', 'page');
+    revalidatePath('/thing/[thingId]/space', 'page');
+    const { data, error: snapshotError } = await client.rpc('same_brain_snapshot', { p_hangout_id: hangoutId });
+    return snapshotError || !data ? { ok: false, error: flowError(snapshotError) } : { ok: true, data };
   } catch { return { ok: false, error: 'connection_failed' }; }
 }

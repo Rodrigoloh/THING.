@@ -32,6 +32,8 @@ export const flowCopy = {
     invalid_hot_level: 'Choose a Hot level.', invalid_hot_mode: 'That Hot mode is unavailable.', hot_consent_required: 'Both people need to choose a Hot level first.',
     our_deck_unavailable: 'Our Deck opens when both people choose Spicy.', hangout_unavailable: 'This Hangout is unavailable.',
     invalid_card: 'Write a card up to 240 characters.', batch_full: 'Your three cards are ready.', batch_incomplete: 'Add three cards before finishing your batch.',
+    prompt_pack_unavailable: 'Same Brain needs more prompts before it can start.', round_unavailable: 'This round moved on. Refresh to catch up.',
+    invalid_answer: 'Choose one of the two answers.', answer_locked: 'Your answer is already locked.',
     too_many_pending: 'You have 10 pending invitations. Cancel one before starting another.', connection_failed: 'Could not connect. Try again.',
   },
   es: {
@@ -67,6 +69,8 @@ export const flowCopy = {
     invalid_hot_level: 'Elige un nivel de Hot.', invalid_hot_mode: 'Ese modo de Hot no está disponible.', hot_consent_required: 'Ambas personas deben elegir primero un nivel de Hot.',
     our_deck_unavailable: 'Our Deck aparece cuando ambos eligen Spicy.', hangout_unavailable: 'Este Hangout no está disponible.',
     invalid_card: 'Escribe una carta de hasta 240 caracteres.', batch_full: 'Tus tres cartas están listas.', batch_incomplete: 'Agrega tres cartas antes de terminar tu tanda.',
+    prompt_pack_unavailable: 'Same Brain necesita más preguntas antes de empezar.', round_unavailable: 'Esta ronda ya avanzó. Actualiza para continuar.',
+    invalid_answer: 'Elige una de las dos respuestas.', answer_locked: 'Tu respuesta ya quedó guardada.',
     too_many_pending: 'Tienes 10 invitaciones pendientes. Cancela una antes de empezar otra.', connection_failed: 'No se pudo conectar. Inténtalo de nuevo.',
   },
 } as const;
