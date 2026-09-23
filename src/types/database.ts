@@ -19,6 +19,7 @@ export type ThingInviteStatus = "active" | "accepted" | "expired" | "revoked";
 
 export type Thing = {
   id: string;
+  nickname: string | null;
   created_by: string;
   status: ThingStatus;
   charm_key: string | null;
@@ -61,8 +62,8 @@ export type Database = {
       };
       things: {
         Row: Thing;
-        Insert: { id?: string; created_by: string; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null; color_key?: ThingColor; color_source?: 'charm' | 'manual' };
-        Update: { status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number; color_key?: ThingColor; color_source?: 'charm' | 'manual' };
+        Insert: { id?: string; created_by: string; nickname?: string | null; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null; color_key?: ThingColor; color_source?: 'charm' | 'manual' };
+        Update: { nickname?: string | null; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number; color_key?: ThingColor; color_source?: 'charm' | 'manual' };
         Relationships: [];
       };
       thing_members: {
@@ -144,8 +145,20 @@ export type Database = {
         Relationships: [];
       };
       thing_souvenirs: {
-        Row: { id: string; thing_id: string; souvenir_key: 'FIRST_THOUGHT' | 'SAME_BRAIN' | 'LOCKED_IN' | 'PERFECT_SYNC'; source_hangout_id: string; unlocked_at: string; metadata_json: Record<string, unknown> };
-        Insert: { id?: string; thing_id: string; souvenir_key: 'FIRST_THOUGHT' | 'SAME_BRAIN' | 'LOCKED_IN' | 'PERFECT_SYNC'; source_hangout_id: string; unlocked_at?: string; metadata_json?: Record<string, unknown> };
+        Row: { id: string; thing_id: string; souvenir_key: import('@/features/space/model').SouvenirKey; source_hangout_id: string; unlocked_at: string; metadata_json: Record<string, unknown> };
+        Insert: { id?: string; thing_id: string; souvenir_key: import('@/features/space/model').SouvenirKey; source_hangout_id: string; unlocked_at?: string; metadata_json?: Record<string, unknown> };
+        Update: { [_ in never]: never };
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: { id: string; thing_id: string; author_id: string; body: string; created_at: string };
+        Insert: { id?: string; thing_id: string; author_id?: string; body: string; created_at?: string };
+        Update: { [_ in never]: never };
+        Relationships: [];
+      };
+      moments: {
+        Row: { id: string; thing_id: string; author_id: string; storage_path: string; caption: string | null; created_at: string };
+        Insert: { id?: string; thing_id: string; author_id?: string; storage_path: string; caption?: string | null; created_at?: string };
         Update: { [_ in never]: never };
         Relationships: [];
       };
@@ -160,6 +173,8 @@ export type Database = {
       choose_thing_charm: { Args: { p_thing_id: string; p_round: number; p_charm: string }; Returns: undefined };
       propose_thing_charm: { Args: { p_thing_id: string; p_expected_version: number; p_charm: string }; Returns: number };
       accept_thing_charm: { Args: { p_thing_id: string; p_expected_version: number }; Returns: undefined };
+      decline_thing_charm: { Args: { p_thing_id: string; p_expected_version: number }; Returns: undefined };
+      update_thing_nickname: { Args: { p_thing_id: string; p_nickname: string }; Returns: undefined };
       thing_snapshot: { Args: { p_thing_id: string }; Returns: ThingSnapshot };
       list_my_things: { Args: Record<string, never>; Returns: ThingSnapshot[] };
       renew_thing_invite: { Args: { p_thing_id: string }; Returns: undefined };

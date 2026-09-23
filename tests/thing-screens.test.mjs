@@ -15,7 +15,7 @@ registerHooks({
       return { url: 'data:text/javascript,' + encodeURIComponent("export async function joinHangout(){throw new Error('Actions must not run during render')}"), shortCircuit: true };
     }
     if (specifier === './actions' && context.parentURL?.endsWith('/features/things/screens.tsx')) {
-      const source = ['acceptCharm', 'acceptInvite', 'forgetInvite', 'manageInvite', 'proposeCharm', 'startThing', 'endThing', 'updateThingColor'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
+      const source = ['acceptCharm', 'declineCharm', 'acceptInvite', 'forgetInvite', 'manageInvite', 'proposeCharm', 'startThing', 'endThing', 'updateThingColor', 'updateThingNickname'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
       return { url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true };
     }
     return next(specifier, context);
@@ -57,18 +57,17 @@ test('Charm proposal renders proposer, correct controls, waiting and final share
   assert.match(partner, /pick another/);
   assert.doesNotMatch(partner, /wrong|mismatch|try again/i);
   const first = render(ThingScreen, { result: { ok: true, data: joined } });
-  assert.equal((first.match(/type="radio"/g) ?? []).length, 4);
+  assert.equal((first.match(/type="radio"/g) ?? []).length, 12);
   assert.match(first, /disabled=""[^>]*>propose this Charm/);
   const active = { ...joined, status: 'active', charm_key: 'clover' };
   const space = { thing_id: active.id, status: 'active', charm_key: 'clover', color_key: 'acid', members: active.members, total_completed_hangouts: 3, current_streak: 2, best_streak: 2, same_brain: { hangouts: 3, rounds: 24, matches: 16, lifetime_match_rate: 16 / 24, best_session_match_rate: 1, best_match_streak: 8 }, souvenirs: [{ key: 'FIRST_THOUGHT', unlocked_at: '2030-01-01T00:00:00Z', source_hangout_id: 'h1' }] };
   const home = render(ThingScreen, { result: { ok: true, data: active }, spaceResult: { ok: true, data: space } });
   assert.match(home, /Test Creator \+ Test Partner/);
-  assert.match(home, /🍀/);
+  assert.match(home, /alt="Clover"/);
   assert.match(home, /Start a Hangout/);
-  assert.match(home, /nothing here yet/);
-  assert.match(home, /3 Hangouts/); assert.match(home, /67% Same Brain/); assert.match(home, /FIRST THOUGHT/);
+  assert.match(home, /3 Hangouts/); assert.match(home, /href="\/thing\/test-thing\/chat"/); assert.match(home, /href="\/thing\/test-thing\/moments"/); assert.match(home, /href="\/thing\/test-thing\/space"/);
   assert.match(home, /aria-label="Thing settings"/);
-  assert.doesNotMatch(home, /Change color|End this Thing|href="\/thing\/test-thing\/space"|your thing\./i);
+  assert.doesNotMatch(home, /Change color|End this Thing|FIRST THOUGHT|your thing\./i);
   assert.doesNotMatch(home, /type="radio"|share invite/);
 });
 test('canonical Thing CTA reflects incoming, waiting and active shared Hangouts', () => {

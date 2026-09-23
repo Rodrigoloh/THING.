@@ -1,6 +1,6 @@
 # THING
 
-Mobile-first app for two people per Thing. Email/password authentication with email OTP fallback, required profiles, Start / Join / Charm proposal, one shared open Hangout, safe cancellation, four playable game engines and a unified Thing page with stats/souvenirs are implemented. Chat, Moments, freeform shared objects and Discover remain outside this implementation.
+Mobile-first app for two people per Thing. Email/password authentication with email OTP fallback, required profiles, shared identity, one shared open Hangout, four playable game engines, private Chat, shared Moments and a persistent Space are implemented. Public discovery and social feeds remain outside this implementation.
 
 See [Thing flow implementation and deployment](docs/thing-flow.md) for migrations, RPCs, security, tests and hosted acceptance steps.
 
@@ -11,7 +11,7 @@ Requires Node.js 20.9+ for Next.js; use Node.js 22.15+ or 24+ for the test modul
 1. `npm install`.
 2. Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` using Supabase Connect. The supplied project API URL is `https://waziecvsylrcovrqavco.supabase.co`. Keep local credentials in the ignored `.env.local`.
 3. Configure providers, email templates and redirect URLs below.
-4. Apply missing files in `supabase/migrations/` in timestamp order through the remaining Hangout engines (008). Do not rerun already applied migrations. See `docs/thing-flow.md` for rollout and test ordering.
+4. Apply missing files in `supabase/migrations/` in timestamp order through the social Hub migration (010). Do not rerun already applied migrations. See `docs/thing-flow.md` for rollout and test ordering.
 5. `npm run dev`, then open `http://localhost:3000`.
 
 On PowerShell use `npm.cmd` if `npm.ps1` is blocked. Set the same two public variables in Vercel's relevant environments and redeploy; Next.js embeds public values at build time. No Google client secret or Supabase service key belongs in the app environment. Missing/invalid environment values fail clearly without echoing values. `.env.local` remains ignored.

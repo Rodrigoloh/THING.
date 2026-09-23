@@ -442,6 +442,10 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       }
       let space = await rpc(a, 'space_snapshot', [joined.id]);
       assert.equal(space.hot.spicy_hangouts, 3); assert.equal(space.hot.kitkat_unlocked, true);
+      assert.ok(space.souvenirs.some((item) => item.key === 'HEAT_CHECK'));
+      assert.ok(space.souvenirs.some((item) => item.key === 'TURNED_UP'));
+      assert.ok(space.souvenirs.some((item) => item.key === 'AFTER_HOURS'));
+      assert.equal(space.souvenirs.some((item) => item.key === 'KITKAT'), false);
 
       const kitkat = await reachSpicy('same_place');
       await answerCurrent(kitkat); await answerCurrent(kitkat);
@@ -449,6 +453,7 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       assert.equal(gate.gate.target_level, 'kitkat'); assert.equal(gate.kitkat_unlocked, true);
       await acceptGate(kitkat, 'kitkat');
       assert.equal((await rpc(a, 'hot_snapshot', [kitkat])).kitkat_first_discovery, true);
+      assert.ok((await rpc(a, 'space_snapshot', [joined.id])).souvenirs.some((item) => item.key === 'KITKAT'));
       await answerCurrent(kitkat, false);
       const final = await rpc(joined.partner, 'complete_hot', [kitkat]);
       assert.equal(final.highest_level, 'kitkat'); assert.equal(final.reached_kitkat, true);
@@ -522,7 +527,7 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       const first = await playSession(3);
       let space = await rpc(a, 'space_snapshot', [joined.id]);
       assert.equal(space.current_streak, 1); assert.equal(space.same_brain.hangouts, 1);
-      assert.deepEqual(space.souvenirs.map((item) => item.key).sort(), ['FIRST_THOUGHT', 'SAME_BRAIN']);
+      assert.deepEqual(space.souvenirs.map((item) => item.key).sort(), ['AFTER_HOURS', 'FIRST_THOUGHT', 'HEAT_CHECK', 'KITKAT', 'SAME_BRAIN', 'TURNED_UP']);
 
       const locked = await playSession(5);
       space = await rpc(joined.partner, 'space_snapshot', [joined.id]);
@@ -541,10 +546,10 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       assert.equal(space.same_brain.hangouts, 3); assert.equal(space.same_brain.rounds, 24); assert.equal(space.same_brain.matches, 16);
       assert.equal(Number(space.same_brain.lifetime_match_rate), 16 / 24);
       assert.equal(Number(space.same_brain.best_session_match_rate), 1); assert.equal(space.same_brain.best_match_streak, 8);
-      assert.deepEqual(space.souvenirs.map((item) => item.key).sort(), ['FIRST_THOUGHT', 'LOCKED_IN', 'PERFECT_SYNC', 'SAME_BRAIN']);
-      assert.equal((await admin.query('select count(*)::int n from public.thing_souvenirs where thing_id=$1', [joined.id])).rows[0].n, 4);
+      assert.deepEqual(space.souvenirs.map((item) => item.key).sort(), ['AFTER_HOURS', 'FIRST_THOUGHT', 'HEAT_CHECK', 'KITKAT', 'LOCKED_IN', 'PERFECT_SYNC', 'SAME_BRAIN', 'TURNED_UP']);
+      assert.equal((await admin.query('select count(*)::int n from public.thing_souvenirs where thing_id=$1', [joined.id])).rows[0].n, 8);
       assert.equal((await rpc(a, 'complete_same_brain', [perfect])).matches, 8);
-      assert.equal((await admin.query('select count(*)::int n from public.thing_souvenirs where thing_id=$1', [joined.id])).rows[0].n, 4);
+      assert.equal((await admin.query('select count(*)::int n from public.thing_souvenirs where thing_id=$1', [joined.id])).rows[0].n, 8);
 
       const incomplete = (await rpc(a, 'create_hangout', [joined.id, 'same_brain', null])).id;
       await rpc(a, 'start_same_brain', [incomplete]);
@@ -555,6 +560,46 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
         assert.equal((await joined.outsider.client.query(`select * from public.${table}`)).rowCount, 0);
       }
     });
+    await t.test('nickname, active Charm proposals, Chat and Moments stay member-only', async () => {
+      await rpc(a, 'update_thing_nickname', [joined.id, '  moon patrol  ']);
+      assert.equal((await admin.query('select nickname from public.things where id=$1', [joined.id])).rows[0].nickname, 'moon patrol');
+      await assert.rejects(rpc(joined.outsider, 'update_thing_nickname', [joined.id, 'stolen']), /thing_unavailable/);
+      await assert.rejects(rpc(a, 'update_thing_nickname', [joined.id, 'x'.repeat(31)]), /invalid_nickname/);
+      await rpc(a, 'update_thing_nickname', [joined.id, '   ']);
+      assert.equal((await admin.query('select nickname from public.things where id=$1', [joined.id])).rows[0].nickname, null);
+
+      const beforeCharm = (await admin.query('select charm_key,color_key,color_source from public.things where id=$1', [joined.id])).rows[0];
+      const version = await rpc(a, 'propose_thing_charm', [joined.id, 0, 'flame']);
+      await assert.rejects(rpc(a, 'accept_thing_charm', [joined.id, version]), /own_proposal/);
+      await rpc(joined.partner, 'accept_thing_charm', [joined.id, version]);
+      let identity = (await admin.query('select charm_key,color_key,color_source from public.things where id=$1', [joined.id])).rows[0];
+      assert.equal(identity.charm_key, 'flame'); assert.equal(identity.color_key, beforeCharm.color_key); assert.equal(identity.color_source, 'manual');
+      await admin.query("update public.things set color_source='charm' where id=$1", [joined.id]);
+      const colorVersion = await rpc(joined.partner, 'propose_thing_charm', [joined.id, 0, 'planet']);
+      await rpc(a, 'accept_thing_charm', [joined.id, colorVersion]);
+      identity = (await admin.query('select charm_key,color_key from public.things where id=$1', [joined.id])).rows[0];
+      assert.deepEqual(identity, { charm_key: 'planet', color_key: 'electric_blue' });
+      const declined = await rpc(a, 'propose_thing_charm', [joined.id, 0, 'heart']);
+      await rpc(joined.partner, 'decline_thing_charm', [joined.id, declined]);
+      assert.equal((await admin.query('select charm_key from public.things where id=$1', [joined.id])).rows[0].charm_key, 'planet');
+      await assert.rejects(rpc(joined.outsider, 'propose_thing_charm', [joined.id, 0, 'eye']), /thing_unavailable/);
+
+      await a.client.query('insert into public.chat_messages(thing_id,body) values($1,$2)', [joined.id, 'still here']);
+      assert.equal((await joined.partner.client.query('select body from public.chat_messages where thing_id=$1', [joined.id])).rows[0].body, 'still here');
+      assert.equal((await joined.outsider.client.query('select * from public.chat_messages')).rowCount, 0);
+      await assert.rejects(joined.outsider.client.query('insert into public.chat_messages(thing_id,body) values($1,$2)', [joined.id, 'nope']), /row-level security/);
+
+      const momentPath = `${joined.id}/${a.id}/${randomUUID()}.jpg`;
+      await a.client.query("insert into storage.objects(bucket_id,name) values('thing-moments',$1)", [momentPath]);
+      await a.client.query('insert into public.moments(thing_id,storage_path,caption) values($1,$2,$3)', [joined.id, momentPath, 'that afternoon']);
+      assert.equal((await joined.partner.client.query('select caption from public.moments where thing_id=$1', [joined.id])).rows[0].caption, 'that afternoon');
+      assert.equal((await joined.partner.client.query("select * from storage.objects where bucket_id='thing-moments'")).rowCount, 1);
+      assert.equal((await joined.outsider.client.query('select * from public.moments')).rowCount, 0);
+      assert.equal((await joined.outsider.client.query("select * from storage.objects where bucket_id='thing-moments'")).rowCount, 0);
+      await assert.rejects(joined.outsider.client.query('insert into public.moments(thing_id,storage_path) values($1,$2)', [joined.id, `${joined.id}/${joined.outsider.id}/${randomUUID()}.jpg`]), /row-level security/);
+      await assert.rejects(joined.outsider.client.query("insert into storage.objects(bucket_id,name) values('thing-moments',$1)", [`${joined.id}/${joined.outsider.id}/${randomUUID()}.jpg`]), /row-level security/);
+    });
+
     await t.test('ending is member-only, idempotent, preserves history and blocks new Hangouts', async () => {
       await assert.rejects(rpc(joined.outsider, 'end_thing', [joined.id]), /thing_unavailable/);
       await rpc(joined.partner, 'end_thing', [joined.id]);

@@ -9,13 +9,23 @@ export async function loadThings(): Promise<Result<ThingSnapshot[]>> {
   try {
     const client = await getSupabaseServerClient();
     const { data, error } = await client.rpc('list_my_things');
-    return error ? { ok: false, error: flowError(error) } : { ok: true, data: data ?? [] };
+    if (error) return { ok: false, error: flowError(error) };
+    const snapshots = data ?? [];
+    const { data: identities, error: identityError } = snapshots.length
+      ? await client.from('things').select('id,nickname').in('id', snapshots.map((thing) => thing.id))
+      : { data: [], error: null };
+    if (identityError) return { ok: false, error: flowError(identityError) };
+    const names = new Map((identities ?? []).map((thing) => [thing.id, thing.nickname]));
+    return { ok: true, data: snapshots.map((thing) => ({ ...thing, nickname: names.get(thing.id) ?? null })) };
   } catch { return { ok: false, error: 'connection_failed' }; }
 }
 export async function loadThing(id: string): Promise<Result<ThingSnapshot>> {
   try {
-    const { data, error } = await (await getSupabaseServerClient()).rpc('thing_snapshot', { p_thing_id: id });
-    return error || !data ? { ok: false, error: error ? flowError(error) : 'thing_unavailable' } : { ok: true, data };
+    const client = await getSupabaseServerClient();
+    const { data, error } = await client.rpc('thing_snapshot', { p_thing_id: id });
+    if (error || !data) return { ok: false, error: error ? flowError(error) : 'thing_unavailable' };
+    const { data: identity, error: identityError } = await client.from('things').select('nickname').eq('id', id).single();
+    return identityError ? { ok: false, error: flowError(identityError) } : { ok: true, data: { ...data, nickname: identity.nickname } };
   } catch { return { ok: false, error: 'connection_failed' }; }
 }
 export async function startThing(requestId: string): Promise<Result<string>> {
@@ -64,6 +74,23 @@ export async function acceptCharm(id: string, version: number): Promise<Result<n
     if (error) return { ok: false, error: flowError(error) };
     revalidatePath('/things');
     revalidatePath(`/thing/${id}`);
+    return { ok: true, data: null };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+export async function declineCharm(id: string, version: number): Promise<Result<null>> {
+  try {
+    const { error } = await (await getSupabaseServerClient()).rpc('decline_thing_charm', { p_thing_id: id, p_expected_version: version });
+    if (error) return { ok: false, error: flowError(error) };
+    revalidatePath(`/thing/${id}`);
+    return { ok: true, data: null };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+export async function updateThingNickname(id: string, nickname: string): Promise<Result<null>> {
+  try {
+    const { error } = await (await getSupabaseServerClient()).rpc('update_thing_nickname', { p_thing_id: id, p_nickname: nickname });
+    if (error) return { ok: false, error: flowError(error) };
+    revalidatePath('/things');
+    revalidatePath(`/thing/${id}`, 'layout');
     return { ok: true, data: null };
   } catch { return { ok: false, error: 'connection_failed' }; }
 }

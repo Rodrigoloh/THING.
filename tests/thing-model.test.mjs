@@ -20,7 +20,8 @@ test('safe errors never expose database internals', () => {
   assert.equal(flowError({ message: 'own_invite' }), 'own_invite');
   assert.equal(flowError({ message: 'private schema and secret details' }), 'connection_failed');
   assert.equal(flowError(null), 'connection_failed');
-  assert.equal(Object.keys(charms).length, 4);
+  assert.deepEqual(Object.keys(charms), ['clover', 'cherry', 'moon', 'spark', 'flame', 'heart', 'dice', 'eye', 'mushroom', 'cloud', 'lightning', 'planet']);
+  assert.equal(charms.flame.defaultColorKey, 'tangerine');
   assert.deepEqual(inviteRpcResult({ ok: false, error: 'invite_rate_limited' }), { ok: false, error: 'invite_rate_limited' });
   assert.deepEqual(inviteRpcResult({ ok: false, error: 'private detail' }), { ok: false, error: 'connection_failed' });
 });

@@ -8,7 +8,7 @@ import { ActionLink } from '@/components/ui/action-link';
 import { useLocale } from '@/lib/i18n/provider';
 import { EmptyThings } from './empty-things';
 import { flowCopy } from './copy';
-import { acceptCharm, acceptInvite, forgetInvite, manageInvite, proposeCharm, startThing } from './actions';
+import { acceptCharm, acceptInvite, declineCharm, forgetInvite, manageInvite, proposeCharm, startThing, updateThingNickname } from './actions';
 import { charms, parseInviteInput, type Charm, type FlowError, type InvitePreview, type Result, type ThingSnapshot } from './model';
 import { buildInviteUrl } from './invite-url';
 import { InviteQr } from './invite-qr';
@@ -18,6 +18,7 @@ import { hangoutCopy } from '@/features/hangouts/copy';
 import { joinHangout } from '@/features/hangouts/actions';
 import { ThingTheme } from '@/components/thing/thing-theme';
 import type { SpaceSnapshot } from '@/features/space/model';
+import { CharmIcon, thingDisplayName } from '@/components/thing/charm-icon';
 
 const button = 'min-h-14 w-full rounded-[18px] bg-accent px-5 py-4 font-semibold text-[#171717] disabled:opacity-50';
 const secondary = 'min-h-12 rounded-[18px] border border-border px-5 py-3 disabled:opacity-50';
@@ -64,22 +65,23 @@ function LoadError({ error }: { error: FlowError }) {
 
 export function ThingsScreen({ result }: { result: Result<ThingSnapshot[]> }) {
   const c = useCopy();
+  const { locale } = useLocale();
   if (!result.ok) return <LoadError error={result.error} />;
   if (!result.data.length) return <EmptyThings />;
   const current = result.data.filter((thing) => thing.status !== 'disconnected');
   const past = result.data.filter((thing) => thing.status === 'disconnected');
-  const cards = (things: ThingSnapshot[]) => <ul className="space-y-4">{things.map((thing) => <li key={thing.id}>
-    <Link href={`/thing/${thing.id}`} className={`${panel} block border-l-8`} style={{ borderLeftColor: thingColors[thing.color_key] }}>
-      <span className="text-4xl" aria-hidden="true">{thing.charm_key ? charms[thing.charm_key] : '◌'}</span>
-      <p className="break-words text-xl font-semibold">{thing.members.map((member) => member.display_name).join(' + ')}</p>
-      <p className="text-muted">{c[thing.status]}</p>
+  const cards = (things: ThingSnapshot[]) => <ul className="divide-y divide-border border-y border-border">{things.map((thing) => { const recent=thing.recent_hangouts[0]; const active=thing.active_hangout; return <li key={thing.id}>
+    <Link href={`/thing/${thing.id}`} className="grid grid-cols-[72px_1fr_auto] items-center gap-4 py-5">
+      <div className="rounded-full p-1" style={{ backgroundColor: `color-mix(in srgb, ${thingColors[thing.color_key]} 18%, transparent)` }}><CharmIcon charm={thing.charm_key} size={64} /></div>
+      <div className="min-w-0"><p className="truncate font-heading text-xl font-bold">{thingDisplayName(thing)}</p>{thing.nickname && <p className="truncate text-sm text-muted">{thing.members.map((member) => member.display_name).join(' + ')}</p>}<p className="mt-1 text-xs font-semibold text-muted">{active ? (!active.current_user_joined ? c.waitingForYou : active.other_user_joined ? c.inProgress : c.waiting) : recent ? `${hangoutCopy[locale][recent.game_type]} · ${recent.result?.matches ?? recent.result?.agreements ?? recent.result?.correct_predictions ?? recent.result?.prompts_completed ?? ''}` : c[thing.status]}</p></div>
+      <span aria-hidden="true" className="text-xl">→</span>
     </Link>
-  </li>)}</ul>;
+  </li>; })}</ul>;
   return <Screen title={c.title}>
     <Sync enabled={result.data.some((thing) => thing.status.startsWith('pending_'))} />
     {cards(current)}
-    <ActionLink href="/things/new">{c.start}</ActionLink><ActionLink href="/join" secondary>{c.join}</ActionLink>
-    {!!past.length && <section className="space-y-3"><h2 className="text-sm font-semibold uppercase tracking-[.16em] text-muted">{c.pastThings}</h2>{cards(past)}</section>}
+    <div className="grid grid-cols-2 gap-3"><ActionLink href="/things/new">+ {c.start.replace('→','')}</ActionLink><ActionLink href="/join" secondary>{c.join}</ActionLink></div>
+    {!!past.length && <details><summary className="min-h-11 cursor-pointer text-sm font-semibold uppercase tracking-[.16em] text-muted">{c.pastThings} · {past.length}</summary>{cards(past)}</details>}
     <Link href="/profile/settings" className="inline-flex min-h-11 items-center underline">{c === flowCopy.es ? 'tu cuenta' : 'your account'}</Link>
   </Screen>;
 }
@@ -108,6 +110,8 @@ function ThingSettings({ thing, open, onClose }: { thing: ThingSnapshot; open: b
   const c = useCopy();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  const [nickname, setNickname] = useState(thing.nickname ?? '');
+  const [selectedCharm, setSelectedCharm] = useState<Charm | null>(null);
   const [pending, transition] = useTransition();
   const [error, setError] = useState<FlowError | null>(null);
   const labels: Record<ThingColor, string> = {
@@ -127,10 +131,15 @@ function ThingSettings({ thing, open, onClose }: { thing: ThingSnapshot; open: b
       else { setConfirming(false); onClose(); router.refresh(); }
     });
   }
+  function saveNickname() { transition(async () => { const result=await updateThingNickname(thing.id,nickname); if(!result.ok)setError(result.error); else router.refresh(); }); }
+  function suggestCharm() { if(!selectedCharm)return; transition(async()=>{const result=await proposeCharm(thing.id,thing.proposal?.version??0,selectedCharm); if(!result.ok)setError(result.error); else {setSelectedCharm(null);router.refresh();}}); }
+  function resolveCharm(accept: boolean) { if(!thing.proposal)return; transition(async()=>{const result=accept?await acceptCharm(thing.id,thing.proposal!.version):await declineCharm(thing.id,thing.proposal!.version); if(!result.ok)setError(result.error); else router.refresh();}); }
   if (!open) return null;
   return <div className="fixed inset-0 z-50 flex items-end bg-black/45 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby="thing-settings-title" onClick={onClose}>
     <div className="w-full max-w-md space-y-6 rounded-t-[28px] bg-background p-6 shadow-2xl sm:rounded-[24px]" onClick={(event) => event.stopPropagation()}>
       <div className="flex items-center justify-between"><h2 id="thing-settings-title" className="font-heading text-2xl font-bold">{c.settings}</h2><button className="min-h-11 min-w-11 text-xl" aria-label={c.close} onClick={onClose}>×</button></div>
+        <section className="space-y-2"><label htmlFor="thing-nickname" className="text-sm font-semibold">Name / nickname</label><div className="flex gap-2"><input id="thing-nickname" value={nickname} maxLength={30} onChange={(event)=>setNickname(event.target.value)} placeholder={thing.members.map((member)=>member.display_name).join(' + ')} className="min-h-12 min-w-0 flex-1 rounded-[16px] border border-border bg-surface px-4"/><button disabled={pending||nickname.trim()===(thing.nickname??'')} onClick={saveNickname} className={secondary}>save</button></div><p className="text-xs text-muted">Shared immediately · 30 characters max</p></section>
+        <section className="space-y-3"><h3 className="text-sm font-semibold">Charm</h3>{thing.proposal ? <div className="rounded-[18px] border border-border p-4"><div className="flex items-center gap-3"><CharmIcon charm={thing.proposal.charm_key} size={64}/><p>{thing.proposal.proposed_by===thing.viewer_id?'Waiting for them…':`${thing.proposal.proposer_name} suggested a new charm`}</p></div>{thing.proposal.proposed_by!==thing.viewer_id&&<div className="mt-3 grid grid-cols-2 gap-2"><button className={secondary} disabled={pending} onClick={()=>resolveCharm(false)}>keep current</button><button className="thing-primary-button min-h-12 rounded-[18px] px-3 font-semibold" disabled={pending} onClick={()=>resolveCharm(true)}>use new charm</button></div>}</div> : <><div className="grid grid-cols-6 gap-2">{(Object.keys(charms) as Charm[]).map((key)=><button type="button" key={key} aria-label={charms[key].label} aria-pressed={selectedCharm===key} onClick={()=>setSelectedCharm(key)} className="rounded-xl border border-border p-1 aria-pressed:border-foreground aria-pressed:bg-[var(--thing-primary-soft)]"><CharmIcon charm={key} size={44}/></button>)}</div><button className={`${secondary} w-full`} disabled={pending||!selectedCharm} onClick={suggestCharm}>suggest new charm</button></>}</section>
         <fieldset disabled={pending}><legend className="mb-3 text-sm font-semibold">{c.changeColor}</legend><div className="grid grid-cols-4 gap-3">
           {(Object.keys(thingColors) as ThingColor[]).map((color) => <button key={color} type="button" aria-label={labels[color]} aria-pressed={thing.color_key === color} onClick={() => changeColor(color)} className="aspect-square min-h-11 rounded-full border-4 border-surface outline outline-1 outline-border aria-pressed:outline-foreground" style={{ backgroundColor: thingColors[color] }} />)}
         </div></fieldset>
@@ -155,12 +164,6 @@ function ActiveThingHome({ thing, spaceResult }: { thing: ThingSnapshot; spaceRe
   const [joinError, setJoinError] = useState<FlowError | null>(null);
   const active = thing.active_hangout;
   const space = spaceResult?.ok ? spaceResult.data : null;
-  const stats = space ? [
-    space.total_completed_hangouts > 0 ? `${space.total_completed_hangouts} ${c.hangoutsShort}` : null,
-    space.current_streak > 0 ? `${space.current_streak} ${c.dayStreak}` : null,
-    space.same_brain.hangouts > 0 ? `${Math.round(space.same_brain.lifetime_match_rate * 100)}% Same Brain` : null,
-    space.same_brain.matches > 0 ? `${space.same_brain.matches} ${c.matchesShort}` : null,
-  ].filter(Boolean) : [];
   function join() {
     if (!active) return;
     transition(async () => {
@@ -171,14 +174,14 @@ function ActiveThingHome({ thing, spaceResult }: { thing: ThingSnapshot; spaceRe
   return <ThingTheme color={thing.color_key} className="space-y-10 pb-8">
     <Sync enabled={thing.status === 'active' && !!active} />
     <header className="flex items-center justify-between py-5"><Link href="/things" className="font-heading text-lg font-black tracking-tight">THING.</Link>{thing.status === 'active' && <button className="min-h-11 min-w-11 text-xl font-bold" aria-label={c.settings} onClick={() => setSettingsOpen(true)}>•••</button>}</header>
-    <section className="space-y-2"><p className="text-5xl" aria-label={thing.charm_key ? c[thing.charm_key] : undefined}>{thing.charm_key ? charms[thing.charm_key] : '◌'}</p><h1 className="font-heading break-words text-3xl font-bold tracking-tight">{thing.members.map((member) => member.display_name).join(' + ')}</h1></section>
-    {!!stats.length && <section aria-label={c.quickStats} className="flex flex-wrap gap-x-5 gap-y-2 border-y border-dotted border-border py-4">{stats.map((stat) => <span key={stat} className="text-sm font-semibold">{stat}</span>)}</section>}
-    {thing.status === 'active' ? <section className="space-y-3 border-l-4 border-[var(--thing-primary)] pl-4">
+    <section className="relative text-center"><span className="absolute left-[12%] top-8 rotate-[-12deg] text-3xl thing-accent-text" aria-hidden="true">✦</span><span className="absolute right-[10%] top-20 rotate-12 text-2xl thing-accent-text" aria-hidden="true">○</span><h1 className="font-heading break-words text-4xl font-black tracking-tight">{thingDisplayName(thing)}</h1>{thing.nickname&&<p className="mt-2 text-sm text-muted">{thing.members.map((member)=>member.display_name).join(' + ')}</p>}<CharmIcon charm={thing.charm_key} size={176} className="mx-auto mt-6" /></section>
+    {thing.status === 'active' ? <section className="mx-auto max-w-md space-y-3">
       {!active ? <ActionLink href={`/thing/${thing.id}/hangout/new`} themed>{c.startHangout}</ActionLink> : <><p className="font-heading text-2xl font-bold">{h[active.game_type]}</p><p className="text-sm text-muted">{!active.current_user_joined ? c.waitingForYou : !active.other_user_joined ? c.waiting : c.inProgress}</p>{active.current_user_joined ? <ActionLink href={`/thing/${thing.id}/hangout/${active.id}`} themed>{active.other_user_joined ? c.continueHangout : c.openHangout}</ActionLink> : <button className="thing-primary-button min-h-14 w-full px-5 py-4 font-semibold disabled:opacity-50" disabled={joining} onClick={join}>{joining ? c.busy : c.joinHangout}</button>}</>}
       <ErrorMessage error={joinError} />
     </section> : <p className="border-y border-border py-5 font-semibold">{c.ended}</p>}
+    <nav aria-label="Thing areas" className="grid grid-cols-3 border-y border-border py-5 text-center font-heading font-bold"><Link className="min-h-12 content-center" href={`/thing/${thing.id}/chat`}>chat</Link><Link className="min-h-12 content-center" href={`/thing/${thing.id}/moments`}>moments</Link><Link className="min-h-12 content-center" href={`/thing/${thing.id}/space`}>space</Link></nav>
+    {space && <p className="text-center text-sm text-muted">{space.current_streak} {c.dayStreak} · {space.total_completed_hangouts} {c.hangoutsShort}</p>}
     <RecentActivity thing={thing} />
-    <section className="space-y-4"><h2 className="font-heading text-sm font-bold uppercase tracking-[.16em]">{c.sharedThings}</h2>{space?.souvenirs.length ? <div className="flex flex-wrap gap-3">{space.souvenirs.map((souvenir, index) => <span key={souvenir.key} className="border-2 border-[var(--thing-accent-border)] bg-[var(--thing-primary-soft)] px-4 py-3 text-sm font-black shadow-[3px_3px_0_var(--thing-primary)]" style={{ transform: `rotate(${index % 2 ? 1.5 : -1.5}deg)` }}>{souvenirLabels[souvenir.key]}</span>)}</div> : <p className="border-y border-dashed border-border py-6 text-sm text-muted">{c.sharedThingsEmpty}</p>}</section>
     {thing.status === 'active' && <ThingSettings thing={thing} open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
   </ThingTheme>;
 }
@@ -324,7 +327,7 @@ function CharmPanel({ thing }: { thing: ThingSnapshot }) {
   return <div className={panel}>
     {thing.proposal && !choosing ? <div className="space-y-5 text-center">
       <p className="text-sm text-muted">{ownProposal ? c.youProposed : c.personProposed.replace('{name}', thing.proposal.proposer_name)}</p>
-      <p className="text-7xl" aria-label={c[thing.proposal.charm_key]}>{charms[thing.proposal.charm_key]}</p>
+      <CharmIcon charm={thing.proposal.charm_key} size={128} className="mx-auto" />
       {ownProposal ? <p role="status">{c.waiting}</p> : <>
         <p>{c.keepQuestion}</p>
         <button className={button} disabled={pending} onClick={keepProposal}>{pending ? c.busy : c.keepCharm}</button>
@@ -333,8 +336,8 @@ function CharmPanel({ thing }: { thing: ThingSnapshot }) {
     </div> : <>
       <p>{thing.proposal ? c.pickAnother : c.pick}</p>
       <fieldset disabled={pending} className="grid grid-cols-2 gap-3"><legend className="sr-only">Charm</legend>
-        {(Object.entries(charms) as [Charm, string][]).map(([key, emoji]) => <label key={key} className={`cursor-pointer rounded-2xl border p-4 text-center ${selected === key ? 'border-foreground bg-background' : 'border-border'}`}>
-          <input type="radio" name="charm" value={key} checked={selected === key} onChange={() => setSelected(key)} className="mr-2" /><span className="text-4xl" aria-hidden="true">{emoji}</span><span className="mt-2 block text-sm">{c[key]}</span>
+        {(Object.entries(charms) as [Charm, (typeof charms)[Charm]][]).map(([key, charm]) => <label key={key} className={`cursor-pointer rounded-2xl border p-4 text-center ${selected === key ? 'border-foreground bg-background' : 'border-border'}`}>
+          <input type="radio" name="charm" value={key} checked={selected === key} onChange={() => setSelected(key)} className="mr-2" /><CharmIcon charm={key} size={64} className="mx-auto" /><span className="mt-2 block text-sm">{charm.label}</span>
         </label>)}
       </fieldset>
       <button className={button} disabled={pending || !selected} onClick={submitProposal}>{pending ? c.busy : c.propose}</button>

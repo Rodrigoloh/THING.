@@ -31,7 +31,9 @@ export function HangoutSelectorScreen({ thingResult }: { thingResult: Result<Thi
   const { locale } = useLocale();
   const c = hangoutCopy[locale];
   const router = useRouter();
-  const [hotOpen, setHotOpen] = useState(false);
+  const [selectedGame, setSelectedGame] = useState<GameType | null>(null);
+  const [situation, setSituation] = useState<HotContext | null>(null);
+  const [duration, setDuration] = useState<'quick' | 'a_bit' | 'hang_out' | null>(null);
   const [error, setError] = useState<FlowError | null>(null);
   const [pending, transition] = useTransition();
   if (!thingResult.ok) return <Screen title={c.title} backHref="/things"><ErrorLine error={thingResult.error} /></Screen>;
@@ -50,11 +52,13 @@ export function HangoutSelectorScreen({ thingResult }: { thingResult: Result<Thi
   }
   return <ThingTheme color={thing.color_key}><Screen title={c.title} backHref={`/thing/${thing.id}`}>
     <div className="h-1 bg-[var(--thing-primary)]" />
-    <div className="space-y-3">{(['same_brain', 'know_me', 'this_or_that', 'hot'] as GameType[]).map((game, index) => <button key={game} type="button" disabled={pending} onClick={() => game === 'hot' ? setHotOpen(true) : start(game)} className={`${panel} block w-full text-left transition-transform active:scale-[.99]`}>
+    <div className="space-y-3">{(['same_brain', 'know_me', 'this_or_that', 'hot'] as GameType[]).map((game, index) => <button key={game} type="button" disabled={pending} aria-pressed={selectedGame===game} onClick={() => { setSelectedGame(game); setSituation(null); setDuration(null); }} className={`${panel} block w-full text-left transition-transform active:scale-[.99] aria-pressed:border-[var(--thing-primary)] aria-pressed:bg-[var(--thing-primary-soft)]`}>
       <span className="thing-accent-text text-xs font-bold">0{index + 1}</span><h2 className="font-heading text-2xl font-bold">{c[game]}</h2><p className="text-sm text-muted">{descriptions[game]}</p>
     </button>)}</div>
-    {hotOpen && <section className="space-y-5 border-y border-[var(--thing-accent-border)] py-6"><div><h2 className="font-heading text-2xl font-bold">{c.togetherQuestion}</h2><p className="mt-2 text-sm text-muted">{c.contextFixed}</p></div><div className="grid gap-3"><button className={primary} disabled={pending} onClick={() => start('hot', 'same_place')}>{c.together}</button><button className={secondary} disabled={pending} onClick={() => start('hot', 'apart')}>{c.apart}</button></div><ErrorLine error={error} /></section>}
-    {!hotOpen && <ErrorLine error={error} />}
+    {selectedGame && <section className="space-y-4 border-t border-dashed border-border pt-6"><h2 className="font-heading text-2xl font-bold">{locale==='es'?'¿cómo están?':'what’s the situation?'}</h2><div className="grid grid-cols-2 gap-3"><button aria-pressed={situation==='same_place'} className={`${secondary} aria-pressed:border-[var(--thing-primary)] aria-pressed:bg-[var(--thing-primary-soft)]`} onClick={()=>setSituation('same_place')}>{c.together}</button><button aria-pressed={situation==='apart'} className={`${secondary} aria-pressed:border-[var(--thing-primary)] aria-pressed:bg-[var(--thing-primary-soft)]`} onClick={()=>setSituation('apart')}>{c.apart}</button></div></section>}
+    {situation && <section className="space-y-4"><h2 className="font-heading text-2xl font-bold">{locale==='es'?'¿cuánto rato?':'how long?'}</h2><div className="grid grid-cols-3 gap-2">{([['quick',locale==='es'?'rápido':'quick'],['a_bit',locale==='es'?'un rato':'a bit'],['hang_out',locale==='es'?'sin prisa':'hang out']] as const).map(([value,label])=><button key={value} aria-pressed={duration===value} className={`${secondary} px-2 aria-pressed:border-[var(--thing-primary)] aria-pressed:bg-[var(--thing-primary-soft)]`} onClick={()=>setDuration(value)}>{label}</button>)}</div></section>}
+    {selectedGame&&situation&&duration&&<button className={primary} disabled={pending} onClick={()=>start(selectedGame,selectedGame==='hot'?situation:null)}>{pending?c.busy:(locale==='es'?'vamos a jugar':'let’s play')}</button>}
+    <ErrorLine error={error} />
   </Screen></ThingTheme>;
 }
 

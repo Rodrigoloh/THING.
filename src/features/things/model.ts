@@ -1,4 +1,17 @@
-export const charms = { cherry: '🍒', moon: '🌙', spark: '✨', clover: '🍀' } as const;
+export const charms = {
+  clover: { label: 'Clover', assetPath: '/charms/clover.svg', defaultColorKey: 'acid' },
+  cherry: { label: 'Cherry', assetPath: '/charms/cherry.svg', defaultColorKey: 'cherry' },
+  moon: { label: 'Moon', assetPath: '/charms/moon.svg', defaultColorKey: 'electric_blue' },
+  spark: { label: 'Spark', assetPath: '/charms/spark.svg', defaultColorKey: 'butter' },
+  flame: { label: 'Flame', assetPath: '/charms/flame.svg', defaultColorKey: 'tangerine' },
+  heart: { label: 'Heart', assetPath: '/charms/heart.svg', defaultColorKey: 'cherry' },
+  dice: { label: 'Dice', assetPath: '/charms/dice.svg', defaultColorKey: 'paper' },
+  eye: { label: 'Eye', assetPath: '/charms/eye.svg', defaultColorKey: 'electric_blue' },
+  mushroom: { label: 'Mushroom', assetPath: '/charms/mushroom.svg', defaultColorKey: 'purple' },
+  cloud: { label: 'Cloud', assetPath: '/charms/cloud.svg', defaultColorKey: 'electric_blue' },
+  lightning: { label: 'Lightning', assetPath: '/charms/lightning.svg', defaultColorKey: 'acid' },
+  planet: { label: 'Planet', assetPath: '/charms/planet.svg', defaultColorKey: 'electric_blue' },
+} as const;
 export type Charm = keyof typeof charms;
 export const thingColors = {
   cherry: '#FF4057', butter: '#FFD84A', electric_blue: '#3E63FF', acid: '#B6F23A',
@@ -9,6 +22,7 @@ export type ActiveHangout = { id: string; game_type: 'same_brain' | 'know_me' | 
 export type RecentHangout = { id: string; game_type: ActiveHangout['game_type']; state: string; created_at: string; completed_at: string | null; result: { matches?: number; rounds?: number; match_rate?: number; best_match_streak?: number; correct_predictions?: number; agreements?: number; agreement_rate?: number; prompts_completed?: number; highest_level?: string } | null; souvenir_keys: string[] };
 export type ThingSnapshot = {
   id: string;
+  nickname: string | null;
   status: 'pending_invite' | 'pending_charm' | 'active' | 'disconnected';
   charm_key: Charm | null;
   color_key: ThingColor;
@@ -51,7 +65,7 @@ export function browserInviteDestination() {
   const code = document.cookie.split('; ').find((part) => part.startsWith(`${inviteCookie}=`))?.slice(inviteCookie.length + 1);
   return inviteDestination(code);
 }
-export const flowErrors = ['session_required', 'profile_required', 'invite_unavailable', 'invite_expired', 'invite_used', 'invite_revoked', 'invite_rate_limited', 'thing_full', 'own_invite', 'thing_unavailable', 'proposal_changed', 'own_proposal', 'invalid_charm', 'invalid_color', 'invalid_game_type', 'invalid_hot_level', 'invalid_hot_mode', 'invalid_hot_context', 'hot_consent_required', 'our_deck_unavailable', 'hangout_unavailable', 'hangout_complete', 'hangout_in_progress', 'invalid_card', 'batch_full', 'batch_incomplete', 'prompt_pack_unavailable', 'round_unavailable', 'invalid_answer', 'invalid_explanation', 'answer_locked', 'too_many_pending', 'connection_failed'] as const;
+export const flowErrors = ['session_required', 'profile_required', 'invite_unavailable', 'invite_expired', 'invite_used', 'invite_revoked', 'invite_rate_limited', 'thing_full', 'own_invite', 'thing_unavailable', 'proposal_changed', 'own_proposal', 'invalid_charm', 'invalid_color', 'invalid_nickname', 'invalid_message', 'invalid_moment', 'invalid_game_type', 'invalid_hot_level', 'invalid_hot_mode', 'invalid_hot_context', 'hot_consent_required', 'our_deck_unavailable', 'hangout_unavailable', 'hangout_complete', 'hangout_in_progress', 'invalid_card', 'batch_full', 'batch_incomplete', 'prompt_pack_unavailable', 'round_unavailable', 'invalid_answer', 'invalid_explanation', 'answer_locked', 'too_many_pending', 'connection_failed'] as const;
 export type FlowError = typeof flowErrors[number];
 export function flowError(error: unknown): FlowError {
   const message = error && typeof error === 'object' && 'message' in error ? error.message : '';

@@ -38,9 +38,9 @@ test('Hangout selector shows four real choices and concise bilingual description
   }
 });
 
-test('Hot entry asks context and never exposes an upfront intensity choice', async () => {
+test('Play entry progresses through situation and duration without an upfront Hot intensity choice', async () => {
   const source = await readFile('src/features/hangouts/screens.tsx', 'utf8');
-  assert.match(source, /togetherQuestion/); assert.match(source, /same_place/); assert.match(source, /apart/);
+  assert.match(source, /selectedGame/); assert.match(source, /same_place/); assert.match(source, /apart/); assert.match(source, /duration/); assert.match(source, /let’s play/);
   assert.doesNotMatch(render(HangoutSelectorScreen, { thingResult: { ok: true, data: thing } }), /choose your Hot limit|Flirty.*Bold.*Spicy/s);
 });
 
