@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeCsvHeader, parseCsv } from '../scripts/import-game-prompts.ts';
+import { normalizeCsvHeader, normalizePromptRow, parseCsv } from '../scripts/import-game-prompts.ts';
 
 const masterHeader = 'ID,Hangout,Engine,Round Type,Level,Prompt EN,Prompt ES,Option A EN,Option A ES,Option B EN,Option B ES,Mood,Context,Intensity,Tags,Adult,Reveal Style,Notes,Status';
 
@@ -25,4 +25,30 @@ test('CSV header normalization trims, removes BOM and normalizes punctuation', (
 test('CSV parsing reports missing required headers clearly', () => {
   assert.throws(() => parseCsv(masterHeader.replace(',Prompt ES', '') + '\n'), /CSV is missing required header\(s\): prompt_es/);
   assert.throws(() => parseCsv('\n, ,\r\n'), /CSV is missing required header\(s\):/);
+});
+
+test('level is null for non-Hot engines and derived strictly for every Hot prefix', () => {
+  const base = {
+    round_type: 'Reveal', prompt_en: 'Pick one', prompt_es: 'Elige una',
+    option_a_en: 'A', option_a_es: 'A', option_b_en: 'B', option_b_es: 'B',
+    context: 'both', status: 'Approved',
+  };
+  const cases = [
+    ['SB-001', 'same_brain', 'standard', null],
+    ['GU-001', 'know_me', 'default', null],
+    ['WH-001', 'this_or_that', 'normal', null],
+    ['HT-F-001', 'hot', 'FLIRTY', 'flirty'],
+    ['HT-B-001', 'hot', 'Bold', 'bold'],
+    ['HT-S-001', 'hot', 'spicy', 'spicy'],
+    ['HT-K-001', 'hot', 'KitKat', 'kitkat'],
+  ];
+  for (const [id, engine, level, expected] of cases) {
+    assert.equal(normalizePromptRow({ ...base, id, engine, level }).level, expected, id);
+  }
+  assert.equal(normalizePromptRow({ ...base, id: 'SB-002', engine: 'same_brain', level: '' }).level, null);
+});
+
+test('Hot level must agree with its stable ID prefix', () => {
+  const row = { id: 'HT-F-999', engine: 'hot', level: 'Spicy', round_type: 'Reveal', prompt_en: 'Pick', prompt_es: 'Elige', option_a_en: 'A', option_a_es: 'A', option_b_en: 'B', option_b_es: 'B', context: 'both', status: 'Approved' };
+  assert.throws(() => normalizePromptRow(row), /HT-F-999 does not match level spicy/);
 });

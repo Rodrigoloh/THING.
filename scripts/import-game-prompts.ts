@@ -79,9 +79,18 @@ const value = (row: SourceRow, ...keys: string[]) => keys.map((key) => row[key])
 const text = (row: SourceRow, ...keys: string[]) => String(value(row, ...keys) ?? '').trim();
 const truthy = (input: unknown) => input === true || ['true', 'yes', '1'].includes(String(input).trim().toLowerCase());
 
-function normalize(row: SourceRow): PromptRow {
+export function normalizePromptRow(row: SourceRow): PromptRow {
   const stableId = text(row, 'stable_id', 'id', 'prompt_id').toUpperCase();
-  const level = text(row, 'level').toLowerCase() || null;
+  const gameType = text(row, 'game_type', 'engine').toLowerCase();
+  const suppliedLevel = text(row, 'level').toLowerCase();
+  const hotPrefixLevels = { 'HT-F-': 'flirty', 'HT-B-': 'bold', 'HT-S-': 'spicy', 'HT-K-': 'kitkat' } as const;
+  const hotLevel = Object.entries(hotPrefixLevels).find(([prefix]) => stableId.startsWith(prefix))?.[1] ?? null;
+  let level: PromptRow['level'] = null;
+  if (gameType === 'hot') {
+    if (!hotLevel) throw new Error(`Hot prompt ID ${stableId || '(unknown ID)'} must start with HT-F-, HT-B-, HT-S-, or HT-K-`);
+    if (suppliedLevel && suppliedLevel !== hotLevel) throw new Error(`ID ${stableId} does not match level ${suppliedLevel}`);
+    level = hotLevel;
+  }
   const statusRaw = text(row, 'status').toLowerCase() || 'draft';
   const status = statusRaw === 'approved' || statusRaw === 'retired' ? statusRaw : 'draft';
   const roundRaw = text(row, 'round_type', 'type').toLowerCase() || 'reveal';
@@ -91,14 +100,11 @@ function normalize(row: SourceRow): PromptRow {
   const tags = Array.isArray(tagsValue) ? tagsValue.map(String) : String(tagsValue ?? '').split(/[|,]/).map((tag) => tag.trim()).filter(Boolean);
   const levelIntensity: Record<string, number> = { flirty: 1, bold: 2, spicy: 3, kitkat: 4 };
   if (!stableId || !text(row, 'prompt_en') || !text(row, 'prompt_es') || !text(row, 'option_a_en') || !text(row, 'option_a_es') || !text(row, 'option_b_en') || !text(row, 'option_b_es')) throw new Error(`Missing required bilingual content for ${stableId || '(unknown ID)'}`);
-  if (stableId.startsWith('HT-') && !['flirty', 'bold', 'spicy', 'kitkat'].includes(level ?? '')) throw new Error(`Invalid Hot level for ${stableId}`);
-  const expectedPrefix: Record<string, string> = { flirty: 'HT-F-', bold: 'HT-B-', spicy: 'HT-S-', kitkat: 'HT-K-' };
-  if (level && stableId.startsWith('HT-') && !stableId.startsWith(expectedPrefix[level])) throw new Error(`ID ${stableId} does not match level ${level}`);
   if (!['both', 'same_place', 'apart', 'anywhere'].includes(context)) throw new Error(`Invalid context for ${stableId}`);
   const reactionRaw = text(row, 'reaction_type').toLowerCase();
   const reactionType = reactionRaw === 'use_it' || reactionRaw === 'move' ? reactionRaw : 'respond';
   return {
-    stable_id: stableId, game_type: text(row, 'game_type', 'engine').toLowerCase(), level, round_type: roundType,
+    stable_id: stableId, game_type: gameType, level, round_type: roundType,
     prompt_en: text(row, 'prompt_en'), prompt_es: text(row, 'prompt_es'), option_a_en: text(row, 'option_a_en'), option_a_es: text(row, 'option_a_es'),
     option_b_en: text(row, 'option_b_en'), option_b_es: text(row, 'option_b_es'), context, intensity: Number(value(row, 'intensity') ?? (level ? levelIntensity[level] : 1)),
     tags, adult: truthy(value(row, 'adult')), status, active: status === 'approved' && text(row, 'active').toLowerCase() !== 'false', reaction_type: reactionType,
@@ -114,7 +120,7 @@ async function main() {
   const absolutePath = resolve(inputPath);
   const raw = await readFile(absolutePath, 'utf8');
   const sourceRows = extname(absolutePath).toLowerCase() === '.json' ? JSON.parse(raw) as SourceRow[] : parseCsv(raw);
-  const rows = sourceRows.map(normalize);
+  const rows = sourceRows.map(normalizePromptRow);
   const duplicate = rows.find((row, index) => rows.findIndex((candidate) => candidate.stable_id === row.stable_id) !== index);
   if (duplicate) throw new Error(`Duplicate stable ID in import: ${duplicate.stable_id}`);
 
