@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
-import { flowError, inviteCookie, inviteRpcResult, normalizeInvite, type Result, type ThingSnapshot, type InvitePreview, type Charm } from './model';
+import { flowError, inviteCookie, inviteRpcResult, normalizeInvite, type Result, type ThingSnapshot, type InvitePreview, type Charm, type ThingColor } from './model';
 
 export async function loadThings(): Promise<Result<ThingSnapshot[]>> {
   try {
@@ -70,6 +70,26 @@ export async function acceptCharm(id: string, version: number): Promise<Result<n
 export async function manageInvite(id: string, action: 'renew' | 'cancel'): Promise<Result<null>> {
   try {
     const { error } = await (await getSupabaseServerClient()).rpc(action === 'renew' ? 'renew_thing_invite' : 'cancel_pending_thing', { p_thing_id: id });
+    if (error) return { ok: false, error: flowError(error) };
+    revalidatePath('/things');
+    revalidatePath(`/thing/${id}`);
+    return { ok: true, data: null };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+
+export async function updateThingColor(id: string, color: ThingColor): Promise<Result<null>> {
+  try {
+    const { error } = await (await getSupabaseServerClient()).rpc('update_thing_color', { p_thing_id: id, p_color_key: color });
+    if (error) return { ok: false, error: flowError(error) };
+    revalidatePath('/things');
+    revalidatePath(`/thing/${id}`);
+    return { ok: true, data: null };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+
+export async function endThing(id: string): Promise<Result<null>> {
+  try {
+    const { error } = await (await getSupabaseServerClient()).rpc('end_thing', { p_thing_id: id });
     if (error) return { ok: false, error: flowError(error) };
     revalidatePath('/things');
     revalidatePath(`/thing/${id}`);

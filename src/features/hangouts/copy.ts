@@ -1,0 +1,24 @@
+export const hangoutCopy = {
+  en: {
+    title: 'pick a Hangout.', back: 'back to your Thing', same_brain: 'Same Brain', know_me: 'Know Me', this_or_that: 'This or That', hot: 'Hot',
+    sameBrainDescription: 'Pick separately. See if you matched.', knowMeDescription: 'Predict what the other person chose.',
+    thisOrThatDescription: 'Vote which of you fits it more.', hotDescription: 'Flirty to spicy prompts, only at a level you both accept.',
+    chooseLevel: 'choose your Hot limit.', privateChoice: 'we only show the shared level.', flirty: 'Flirty', bold: 'Bold', spicy: 'Spicy',
+    waitingConsent: 'waiting for both choices…', sharedLevel: 'shared level', start: 'start →', ourDeck: 'Our Deck',
+    ourDeckDescription: 'Make your own private cards, then mix them together.', makeBatch: 'make your batch.', cardsEach: '3 cards each.',
+    mixed: 'we’ll mix them together.', anonymous: 'no names attached.', addCard: 'add card', finishBatch: 'finish my batch',
+    yourCards: 'your cards', theirCards: 'their cards', waitingBatch: 'waiting for the other batch…', batchReady: 'both batches are ready.',
+    foundation: 'This Hangout is ready for its game engine.', state: 'status', retry: 'try again', busy: 'one moment…',
+  },
+  es: {
+    title: 'elijan un Hangout.', back: 'volver a su Thing', same_brain: 'Same Brain', know_me: 'Know Me', this_or_that: 'This or That', hot: 'Hot',
+    sameBrainDescription: 'Elijan por separado y vean si coincidieron.', knowMeDescription: 'Adivina qué eligió la otra persona.',
+    thisOrThatDescription: 'Voten a quién le queda mejor.', hotDescription: 'Preguntas de coquetas a picantes, solo al nivel que ambos acepten.',
+    chooseLevel: 'elige tu límite para Hot.', privateChoice: 'solo mostramos el nivel compartido.', flirty: 'Coqueto', bold: 'Atrevido', spicy: 'Picante',
+    waitingConsent: 'esperando las dos elecciones…', sharedLevel: 'nivel compartido', start: 'empezar →', ourDeck: 'Our Deck',
+    ourDeckDescription: 'Creen cartas privadas y después mézclenlas.', makeBatch: 'arma tu tanda.', cardsEach: '3 cartas cada quien.',
+    mixed: 'las mezclaremos.', anonymous: 'sin nombres.', addCard: 'agregar carta', finishBatch: 'terminar mi tanda',
+    yourCards: 'tus cartas', theirCards: 'sus cartas', waitingBatch: 'esperando la otra tanda…', batchReady: 'las dos tandas están listas.',
+    foundation: 'Este Hangout está listo para recibir su juego.', state: 'estado', retry: 'reintentar', busy: 'un momento…',
+  },
+} as const;

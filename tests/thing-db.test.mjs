@@ -185,6 +185,67 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       await assert.rejects(rpc(a, 'propose_thing_charm', [joined.id, 2, 'moon']), /proposal_changed/);
       await assert.rejects(rpc(joined.partner, 'accept_thing_charm', [joined.id, 2]), /proposal_changed/);
     });
+    await t.test('shared color is validated, visible to both members and hidden from outsiders', async () => {
+      assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).color_key, 'cherry');
+      await rpc(joined.partner, 'update_thing_color', [joined.id, 'purple']);
+      assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).color_key, 'purple');
+      assert.equal((await rpc(joined.partner, 'thing_snapshot', [joined.id])).color_key, 'purple');
+      await assert.rejects(rpc(a, 'update_thing_color', [joined.id, 'rainbow']), /invalid_color/);
+      await assert.rejects(rpc(joined.outsider, 'update_thing_color', [joined.id, 'acid']), /thing_unavailable/);
+    });
+    let ourDeck;
+    await t.test('Hangouts require an active Thing, valid game and Thing membership', async () => {
+      await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'unknown', null]), /invalid_game_type/);
+      await assert.rejects(rpc(joined.outsider, 'create_hangout', [joined.id, 'same_brain', null]), /thing_unavailable/);
+      const hangoutId = await rpc(a, 'create_hangout', [joined.id, 'same_brain', null]);
+      const snapshot = await rpc(joined.partner, 'hangout_snapshot', [hangoutId]);
+      assert.equal(snapshot.game_type, 'same_brain'); assert.equal(snapshot.state, 'setup');
+      assert.deepEqual(snapshot.members.map((member) => member.display_name), ['Creator', joined.partner === b ? 'Partner' : 'Outsider']);
+      await assert.rejects(rpc(joined.outsider, 'hangout_snapshot', [hangoutId]), /hangout_unavailable/);
+      await assert.rejects(a.client.query("insert into public.hangouts(thing_id,game_type) values($1,'same_brain')", [joined.id]), /permission denied/);
+    });
+    await t.test('Hot uses the lower shared consent and gates private Our Deck batches', async () => {
+      assert.deepEqual(await rpc(a, 'hot_setup_snapshot', [joined.id]), { own_level: null, shared_level: null, both_ready: false, our_deck_available: false });
+      let setup = await rpc(a, 'set_hot_consent', [joined.id, 'spicy']);
+      assert.equal(setup.shared_level, null); assert.equal(setup.our_deck_available, false);
+      setup = await rpc(joined.partner, 'set_hot_consent', [joined.id, 'bold']);
+      assert.equal(setup.shared_level, 'bold'); assert.equal(setup.our_deck_available, false);
+      await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck']), /our_deck_unavailable/);
+      const standard = await rpc(a, 'create_hangout', [joined.id, 'hot', 'standard']);
+      assert.equal((await rpc(a, 'hangout_snapshot', [standard])).hot_level, 'bold');
+      setup = await rpc(joined.partner, 'set_hot_consent', [joined.id, 'spicy']);
+      assert.equal(setup.shared_level, 'spicy'); assert.equal(setup.our_deck_available, true);
+      ourDeck = await rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck']);
+      for (const text of ['one', 'two', 'three']) await rpc(a, 'add_hot_deck_card', [ourDeck, text]);
+      for (const text of ['four', 'five', 'six']) await rpc(joined.partner, 'add_hot_deck_card', [ourDeck, text]);
+      await assert.rejects(rpc(a, 'add_hot_deck_card', [ourDeck, 'extra']), /batch_full/);
+      await assert.rejects(rpc(joined.outsider, 'add_hot_deck_card', [ourDeck, 'outside']), /hangout_unavailable/);
+      assert.equal((await a.client.query('select * from public.hot_deck_cards where hangout_id=$1', [ourDeck])).rowCount, 3);
+      assert.equal((await joined.partner.client.query('select * from public.hot_deck_cards where hangout_id=$1', [ourDeck])).rowCount, 3);
+      assert.equal((await joined.outsider.client.query('select * from public.hot_deck_cards where hangout_id=$1', [ourDeck])).rowCount, 0);
+      const hidden = await rpc(a, 'hangout_snapshot', [ourDeck]);
+      assert.equal(hidden.own_card_count, 3); assert.equal(hidden.partner_card_count, 3);
+      assert.doesNotMatch(JSON.stringify(hidden), /created_by|one|four/);
+      await rpc(a, 'ready_hot_batch', [ourDeck]);
+      await rpc(joined.partner, 'ready_hot_batch', [ourDeck]);
+      assert.equal((await rpc(a, 'hangout_snapshot', [ourDeck])).state, 'ready');
+      setup = await rpc(a, 'set_hot_consent', [joined.id, 'bold']);
+      assert.equal(setup.shared_level, 'bold'); assert.equal(setup.our_deck_available, false);
+      assert.equal((await rpc(a, 'hangout_snapshot', [ourDeck])).state, 'abandoned');
+      await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck']), /our_deck_unavailable/);
+    });
+    await t.test('ending is member-only, idempotent, preserves history and blocks new Hangouts', async () => {
+      await assert.rejects(rpc(joined.outsider, 'end_thing', [joined.id]), /thing_unavailable/);
+      await rpc(joined.partner, 'end_thing', [joined.id]);
+      await rpc(a, 'end_thing', [joined.id]);
+      for (const member of [a, joined.partner]) {
+        const ended = await rpc(member, 'thing_snapshot', [joined.id]);
+        assert.equal(ended.status, 'disconnected');
+        assert.ok(ended.recent_hangouts.length >= 3);
+      }
+      assert.equal((await rpc(a, 'hangout_snapshot', [ourDeck])).state, 'abandoned');
+      await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'know_me', null]), /thing_unavailable/);
+    });
     await t.test('expired, revoked, unknown invites fail; renewal invalidates the old code', async () => {
       const d = await draft();
       await admin.query("update public.thing_invites set created_at=now()-interval '8 days',expires_at=now()-interval '1 day' where thing_id=$1", [d.id]);

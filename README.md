@@ -1,6 +1,6 @@
 # THING
 
-Mobile-first app for two people per Thing. Email/password authentication with email OTP fallback, required profiles, preset/uploaded avatars and English/Spanish UI are joined by real Start / Join / Charm proposal / Thing Home. Games, Hangouts, chat, Moments, Space persistence, streaks and Discover are outside this implementation.
+Mobile-first app for two people per Thing. Email/password authentication with email OTP fallback, required profiles, Start / Join / Charm proposal, a useful Thing Home and the durable Hangout entry/setup flow are implemented. Individual game engines, chat, Moments, freeform Space persistence, streaks and Discover remain outside this implementation.
 
 See [Thing flow implementation and deployment](docs/thing-flow.md) for migrations, RPCs, security, tests and hosted acceptance steps.
 
@@ -11,7 +11,7 @@ Requires Node.js 20.9+ for Next.js; use Node.js 22.15+ or 24+ for the test modul
 1. `npm install`.
 2. Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` using Supabase Connect. The supplied project API URL is `https://waziecvsylrcovrqavco.supabase.co`. Keep local credentials in the ignored `.env.local`.
 3. Configure providers, email templates and redirect URLs below.
-4. Apply missing files in `supabase/migrations/` in timestamp order: profiles (001), original Things foundation (002), functional Start/Join/Charm upgrade (003), then invite/password/Charm refinement (004). Do not rerun already applied migrations. See `docs/thing-flow.md` for rollout and test ordering.
+4. Apply missing files in `supabase/migrations/` in timestamp order: profiles (001), original Things foundation (002), functional Start/Join/Charm upgrade (003), invite/password/Charm refinement (004), then Thing Home/Hangouts foundation (005). Do not rerun already applied migrations. See `docs/thing-flow.md` for rollout and test ordering.
 5. `npm run dev`, then open `http://localhost:3000`.
 
 On PowerShell use `npm.cmd` if `npm.ps1` is blocked. Set the same two public variables in Vercel's relevant environments and redeploy; Next.js embeds public values at build time. No Google client secret or Supabase service key belongs in the app environment. Missing/invalid environment values fail clearly without echoing values. `.env.local` remains ignored.
@@ -46,6 +46,8 @@ The browser supplies its actual origin to `signInWithOAuth`. The callback sends 
 ### Email and password
 
 In Authentication > Sign In / Providers > Email, keep Email and email/password sign-in enabled, require email confirmation, and allow new users to sign up. Keep Anonymous Sign-Ins disabled. Set the project's minimum password length to at least 8 characters to match the app. The same provider also powers the optional 6-to-10-digit OTP fallback.
+
+The primary Create account form calls `auth.signUp({ email, password, options: { emailRedirectTo } })`. It never calls `signInWithOtp`; that SDK method is reachable only after the user explicitly chooses **Use a code instead**. A code-style password-registration email means the Supabase **Confirm signup** template below needs correction.
 
 Keep the **Confirm signup** and **Reset password / Recovery** templates' `{{ .ConfirmationURL }}` links intact so password signup and recovery return through `/auth/callback`. Add both exact callback URLs under Authentication > URL Configuration:
 
@@ -91,6 +93,8 @@ The unchanged `20260922000200_create_things.sql` from `d64a5e1` defines `things`
 
 The additive `20260922000300_thing_flow.sql` supplies the original functional API. The new `20260922000400_invites_password_charm_refine.sql` keeps existing data while changing new invites to six readable characters, adding account-scoped lookup throttling and replacing active Charm rounds with one current proposal. Either member can replace the proposal; only the other member can accept its current version. Acceptance atomically sets the final Charm, activation timestamp and `active` state. Legacy choices remain as history, and one unresolved legacy choice is promoted into a proposal where possible.
 
+`20260922000500_thing_home_hangouts_foundation.sql` adds a closed shared color palette, member-only soft ending, Hangouts/participants, private Hot consent and private Our Deck batches. Active Home now shows identity, Start a Hangout, Space, real recent activity and compact settings. Disconnected Things are preserved under Past Things. See [Hangout foundation](docs/hangouts.md) for schema, privacy and deferred game-engine work.
+
 ## Profiles and avatars
 
 `profiles.id` references `auth.users.id`. A profile requires explicit submission of a trimmed 1-50-character display name and `en`/`es` locale. Avatars can be one of eight bundled SVG presets, initials, or JPEG/PNG/WebP up to 5 MiB. Upload happens only after form submission. Switching back to a preset before submitting does not upload the discarded photo.
@@ -112,7 +116,7 @@ node scripts/check-routes.mjs
 
 `CHECK_ORIGIN` can point the route check to another local test port. It performs only unauthenticated HTTP reads. Auth tests mock password sign-in/signup/update/recovery and OTP fallback, including safe failures, same-user updates, exact callback URLs, session reuse, identity projection, guest rejection, logout and EN/ES UI. Existing profile, avatar, locale, empty-dashboard and environment tests remain.
 
-The existing SQL files in `supabase/tests/` are preserved. `npm test` executes the original `things_rls.sql` against migration 002, then applies 003 and 004 and checks the RPC-only API, RLS, transactions and races. It covers short-code generation/collisions, legacy codes, account throttling, proposal replacement/acceptance and simultaneous proposal/accept races. Do not run the original direct-write Things test against an upgraded database; it intentionally describes the old API.
+The existing SQL files in `supabase/tests/` are preserved. `npm test` executes the original `things_rls.sql` against migration 002, then applies 003–005 and checks the RPC-only API, RLS, transactions and races. It covers short/legacy invites, Charm proposals, shared color, soft ending, Hangout access, lower-of-two Hot consent and private Our Deck batches. Do not run the original direct-write Things test against an upgraded database; it intentionally describes the old API.
 
 ### Manual end-to-end verification after configuration
 

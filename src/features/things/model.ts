@@ -1,14 +1,22 @@
 export const charms = { cherry: '🍒', moon: '🌙', spark: '✨', clover: '🍀' } as const;
 export type Charm = keyof typeof charms;
+export const thingColors = {
+  cherry: '#FF4057', butter: '#FFD84A', electric_blue: '#3E63FF', acid: '#B6F23A',
+  tangerine: '#FF7438', purple: '#A56BFF', paper: '#F4F1E9', ink: '#161616',
+} as const;
+export type ThingColor = keyof typeof thingColors;
+export type RecentHangout = { id: string; game_type: 'same_brain' | 'know_me' | 'this_or_that' | 'hot'; state: string; created_at: string };
 export type ThingSnapshot = {
   id: string;
   status: 'pending_invite' | 'pending_charm' | 'active' | 'disconnected';
   charm_key: Charm | null;
+  color_key: ThingColor;
   created_by: string;
   viewer_id: string;
   members: { user_id: string; display_name: string }[];
   proposal: { charm_key: Charm; proposed_by: string; proposer_name: string; version: number } | null;
   invite: { code: string; expires_at: string; expired: boolean } | null;
+  recent_hangouts: RecentHangout[];
 };
 export type InvitePreview = { inviter_name: string; expires_at: string };
 export type InviteRpcResult<T> = { ok: true; data: T } | { ok: false; error: FlowError };
@@ -40,7 +48,7 @@ export function browserInviteDestination() {
   const code = document.cookie.split('; ').find((part) => part.startsWith(`${inviteCookie}=`))?.slice(inviteCookie.length + 1);
   return inviteDestination(code);
 }
-export const flowErrors = ['session_required', 'profile_required', 'invite_unavailable', 'invite_expired', 'invite_used', 'invite_revoked', 'invite_rate_limited', 'thing_full', 'own_invite', 'thing_unavailable', 'proposal_changed', 'own_proposal', 'invalid_charm', 'too_many_pending', 'connection_failed'] as const;
+export const flowErrors = ['session_required', 'profile_required', 'invite_unavailable', 'invite_expired', 'invite_used', 'invite_revoked', 'invite_rate_limited', 'thing_full', 'own_invite', 'thing_unavailable', 'proposal_changed', 'own_proposal', 'invalid_charm', 'invalid_color', 'invalid_game_type', 'invalid_hot_level', 'invalid_hot_mode', 'hot_consent_required', 'our_deck_unavailable', 'hangout_unavailable', 'invalid_card', 'batch_full', 'batch_incomplete', 'too_many_pending', 'connection_failed'] as const;
 export type FlowError = typeof flowErrors[number];
 export function flowError(error: unknown): FlowError {
   const message = error && typeof error === 'object' && 'message' in error ? error.message : '';

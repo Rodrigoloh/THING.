@@ -12,6 +12,9 @@ import { acceptCharm, acceptInvite, forgetInvite, manageInvite, proposeCharm, st
 import { charms, parseInviteInput, type Charm, type FlowError, type InvitePreview, type Result, type ThingSnapshot } from './model';
 import { buildInviteUrl } from './invite-url';
 import { InviteQr } from './invite-qr';
+import { endThing, updateThingColor } from './actions';
+import { thingColors, type ThingColor } from './model';
+import { hangoutCopy } from '@/features/hangouts/copy';
 
 const button = 'min-h-14 w-full rounded-[18px] bg-accent px-5 py-4 font-semibold text-[#171717] disabled:opacity-50';
 const secondary = 'min-h-12 rounded-[18px] border border-border px-5 py-3 disabled:opacity-50';
@@ -60,18 +63,89 @@ export function ThingsScreen({ result }: { result: Result<ThingSnapshot[]> }) {
   const c = useCopy();
   if (!result.ok) return <LoadError error={result.error} />;
   if (!result.data.length) return <EmptyThings />;
+  const current = result.data.filter((thing) => thing.status !== 'disconnected');
+  const past = result.data.filter((thing) => thing.status === 'disconnected');
+  const cards = (things: ThingSnapshot[]) => <ul className="space-y-4">{things.map((thing) => <li key={thing.id}>
+    <Link href={`/thing/${thing.id}`} className={`${panel} block border-l-8`} style={{ borderLeftColor: thingColors[thing.color_key] }}>
+      <span className="text-4xl" aria-hidden="true">{thing.charm_key ? charms[thing.charm_key] : '◌'}</span>
+      <p className="break-words text-xl font-semibold">{thing.members.map((member) => member.display_name).join(' + ')}</p>
+      <p className="text-muted">{c[thing.status]}</p>
+    </Link>
+  </li>)}</ul>;
   return <Screen title={c.title}>
     <Sync enabled={result.data.some((thing) => thing.status.startsWith('pending_'))} />
-    <ul className="space-y-4">{result.data.map((thing) => <li key={thing.id}>
-      <Link href={`/thing/${thing.id}`} className={`${panel} block`}>
-        <span className="text-4xl" aria-hidden="true">{thing.charm_key ? charms[thing.charm_key] : '◌'}</span>
-        <p className="break-words text-xl font-semibold">{thing.members.map((member) => member.display_name).join(' + ')}</p>
-        <p className="text-muted">{c[thing.status]}</p>
-      </Link>
-    </li>)}</ul>
+    {cards(current)}
     <ActionLink href="/things/new">{c.start}</ActionLink><ActionLink href="/join" secondary>{c.join}</ActionLink>
+    {!!past.length && <section className="space-y-3"><h2 className="text-sm font-semibold uppercase tracking-[.16em] text-muted">{c.pastThings}</h2>{cards(past)}</section>}
     <Link href="/profile/settings" className="inline-flex min-h-11 items-center underline">{c === flowCopy.es ? 'tu cuenta' : 'your account'}</Link>
   </Screen>;
+}
+
+function RecentActivity({ thing }: { thing: ThingSnapshot }) {
+  const { locale } = useLocale();
+  const c = useCopy();
+  const h = hangoutCopy[locale];
+  return <section className="space-y-3">
+    <h2 className="text-sm font-semibold uppercase tracking-[.16em] text-muted">{c.recentActivity}</h2>
+    {thing.recent_hangouts.length ? <ul className="space-y-2">{thing.recent_hangouts.map((item) => <li key={item.id} className="flex items-center justify-between rounded-[18px] border border-border p-4">
+      <span className="font-semibold">{h[item.game_type]}</span><span className="text-sm text-muted">{new Date(item.created_at).toLocaleDateString(locale)}</span>
+    </li>)}</ul> : <div className={panel}><p className="font-semibold">{c.nothingYet}</p><p className="text-sm text-muted">{c.makeSomething}</p></div>}
+  </section>;
+}
+
+function ThingSettings({ thing }: { thing: ThingSnapshot }) {
+  const c = useCopy();
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [pending, transition] = useTransition();
+  const [error, setError] = useState<FlowError | null>(null);
+  const labels: Record<ThingColor, string> = {
+    cherry: c.colorCherry, butter: c.colorButter, electric_blue: c.colorElectricBlue, acid: c.colorAcid,
+    tangerine: c.colorTangerine, purple: c.colorPurple, paper: c.colorPaper, ink: c.colorInk,
+  };
+  function changeColor(color: ThingColor) {
+    transition(async () => {
+      const result = await updateThingColor(thing.id, color);
+      if (!result.ok) setError(result.error); else router.refresh();
+    });
+  }
+  function finish() {
+    transition(async () => {
+      const result = await endThing(thing.id);
+      if (!result.ok) setError(result.error);
+      else { setConfirming(false); router.refresh(); }
+    });
+  }
+  return <div className="relative">
+    <details className="rounded-[18px] border border-border bg-surface p-4">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between font-semibold"><span>{c.settings}</span><span aria-hidden="true">•••</span></summary>
+      <div className="mt-4 space-y-5 border-t border-border pt-4">
+        <fieldset disabled={pending}><legend className="mb-3 text-sm font-semibold">{c.changeColor}</legend><div className="grid grid-cols-4 gap-3">
+          {(Object.keys(thingColors) as ThingColor[]).map((color) => <button key={color} type="button" aria-label={labels[color]} aria-pressed={thing.color_key === color} onClick={() => changeColor(color)} className="aspect-square min-h-11 rounded-full border-4 border-surface outline outline-1 outline-border aria-pressed:outline-foreground" style={{ backgroundColor: thingColors[color] }} />)}
+        </div></fieldset>
+        <button type="button" className="min-h-11 text-sm underline underline-offset-4" onClick={() => setConfirming(true)}>{c.endThing}</button>
+        <ErrorMessage error={error} />
+      </div>
+    </details>
+    {confirming && <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby="end-thing-title">
+      <div className="w-full max-w-md space-y-5 rounded-[24px] bg-background p-6 shadow-2xl"><h2 id="end-thing-title" className="text-3xl font-bold">{c.endTitle}</h2><p>{c.endBody}</p>
+        <div className="grid grid-cols-2 gap-3"><button className={secondary} disabled={pending} onClick={() => setConfirming(false)}>{c.close}</button><button className="min-h-12 rounded-[18px] bg-foreground px-4 text-background" disabled={pending} onClick={finish}>{c.endConfirm}</button></div>
+      </div>
+    </div>}
+  </div>;
+}
+
+function ActiveThingHome({ thing }: { thing: ThingSnapshot }) {
+  const c = useCopy();
+  return <div className="space-y-6">
+    <div className={`${panel} overflow-hidden p-0`}><div className="h-3" style={{ backgroundColor: thingColors[thing.color_key] }} /><div className="space-y-3 p-6 text-center">
+      <p className="text-7xl" aria-label={thing.charm_key ? c[thing.charm_key] : undefined}>{thing.charm_key ? charms[thing.charm_key] : '◌'}</p>
+      <p className="break-words text-2xl font-semibold">{thing.members.map((member) => member.display_name).join(' + ')}</p>
+    </div></div>
+    {thing.status === 'active' ? <><ActionLink href={`/thing/${thing.id}/hangout/new`}>{c.startHangout}</ActionLink><ActionLink href={`/thing/${thing.id}/space`} secondary>{c.space}</ActionLink></> : <p className={`${panel} font-semibold`}>{c.ended}</p>}
+    <RecentActivity thing={thing} />
+    {thing.status === 'active' && <ThingSettings thing={thing} />}
+  </div>;
 }
 
 export function StartScreen() {
@@ -240,9 +314,9 @@ export function ThingScreen({ result }: { result: Result<ThingSnapshot> }) {
   const thing = result.data;
   return <Screen title={c[thing.status]} backHref="/things">
     <Sync enabled={thing.status.startsWith('pending_')} />
-    <p className="break-words text-xl font-semibold">{thing.members.map((member) => member.display_name).join(' + ')}</p>
+    {thing.status.startsWith('pending_') && <p className="break-words text-xl font-semibold">{thing.members.map((member) => member.display_name).join(' + ')}</p>}
     {thing.status === 'pending_invite' && <><p className="text-muted">{c.invite}</p><InvitePanel thing={thing} /></>}
     {thing.status === 'pending_charm' && <CharmPanel key={`${thing.id}:${thing.proposal?.version ?? 0}`} thing={thing} />}
-    {thing.status === 'active' && thing.charm_key && <div className={`${panel} py-12 text-center`}><p className="text-8xl" aria-label={c[thing.charm_key]}>{charms[thing.charm_key]}</p><p>{c.home}</p></div>}
+    {(thing.status === 'active' || thing.status === 'disconnected') && <ActiveThingHome thing={thing} />}
   </Screen>;
 }

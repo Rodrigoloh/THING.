@@ -9,7 +9,8 @@ export type Profile = {
   locale: "en" | "es";
 };
 
-import type { ThingSnapshot, InvitePreview, InviteRpcResult } from '@/features/things/model';
+import type { ThingSnapshot, InvitePreview, InviteRpcResult, ThingColor } from '@/features/things/model';
+import type { GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup } from '@/features/hangouts/model';
 export type ThingStatus = "pending_invite" | "pending_charm" | "active" | "disconnected";
 export type ThingMemberRole = "creator" | "member";
 export type ThingMemberStatus = "pending" | "active" | "left";
@@ -25,6 +26,7 @@ export type Thing = {
   activated_at: string | null;
   charm_round: number;
   request_id: string | null;
+  color_key: ThingColor;
 };
 
 export type ThingMember = {
@@ -57,8 +59,8 @@ export type Database = {
       };
       things: {
         Row: Thing;
-        Insert: { id?: string; created_by: string; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null };
-        Update: { status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number };
+        Insert: { id?: string; created_by: string; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null; color_key?: ThingColor };
+        Update: { status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number; color_key?: ThingColor };
         Relationships: [];
       };
       thing_members: {
@@ -91,6 +93,30 @@ export type Database = {
         Update: { window_started?: string; attempts?: number };
         Relationships: [];
       };
+      hot_consents: {
+        Row: { thing_id: string; user_id: string; accepted_level: HotLevel; updated_at: string };
+        Insert: { thing_id: string; user_id: string; accepted_level: HotLevel; updated_at?: string };
+        Update: { accepted_level?: HotLevel; updated_at?: string };
+        Relationships: [];
+      };
+      hangouts: {
+        Row: { id: string; thing_id: string; game_type: GameType; state: HangoutSnapshot['state']; hot_level: HotLevel | null; hot_mode: HotMode | null; result: unknown; created_at: string; started_at: string | null; completed_at: string | null };
+        Insert: { id?: string; thing_id: string; game_type: GameType; state?: HangoutSnapshot['state']; hot_level?: HotLevel | null; hot_mode?: HotMode | null; result?: unknown; created_at?: string; started_at?: string | null; completed_at?: string | null };
+        Update: { state?: HangoutSnapshot['state']; result?: unknown; started_at?: string | null; completed_at?: string | null };
+        Relationships: [];
+      };
+      hangout_members: {
+        Row: { hangout_id: string; user_id: string; batch_ready: boolean; joined_at: string };
+        Insert: { hangout_id: string; user_id: string; batch_ready?: boolean; joined_at?: string };
+        Update: { batch_ready?: boolean };
+        Relationships: [];
+      };
+      hot_deck_cards: {
+        Row: { id: string; hangout_id: string; created_by: string; content: string; card_state: 'deck' | 'drawn' | 'discard'; created_at: string; drawn_at: string | null };
+        Insert: { id?: string; hangout_id: string; created_by: string; content: string; card_state?: 'deck' | 'drawn' | 'discard'; created_at?: string; drawn_at?: string | null };
+        Update: { card_state?: 'deck' | 'drawn' | 'discard'; drawn_at?: string | null };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -106,6 +132,14 @@ export type Database = {
       list_my_things: { Args: Record<string, never>; Returns: ThingSnapshot[] };
       renew_thing_invite: { Args: { p_thing_id: string }; Returns: undefined };
       cancel_pending_thing: { Args: { p_thing_id: string }; Returns: undefined };
+      update_thing_color: { Args: { p_thing_id: string; p_color_key: ThingColor }; Returns: undefined };
+      end_thing: { Args: { p_thing_id: string }; Returns: undefined };
+      hot_setup_snapshot: { Args: { p_thing_id: string }; Returns: HotSetup };
+      set_hot_consent: { Args: { p_thing_id: string; p_level: HotLevel }; Returns: HotSetup };
+      create_hangout: { Args: { p_thing_id: string; p_game_type: GameType; p_hot_mode: HotMode | null }; Returns: string };
+      hangout_snapshot: { Args: { p_hangout_id: string }; Returns: HangoutSnapshot };
+      add_hot_deck_card: { Args: { p_hangout_id: string; p_content: string }; Returns: string };
+      ready_hot_batch: { Args: { p_hangout_id: string }; Returns: undefined };
       is_active_thing_member: { Args: { target_thing_id: string }; Returns: boolean };
       is_thing_creator: { Args: { target_thing_id: string }; Returns: boolean };
     };

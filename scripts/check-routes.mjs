@@ -9,7 +9,7 @@ assert.match(entry, /Use a code instead/);
 assert.doesNotMatch(entry, /Continue with Google/);
 console.log("PASS / renders authentication");
 
-for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/auth/update-password", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new"]) {
+for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/auth/update-password", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new", "/thing/test/hangout/test"]) {
   const response = await fetch(origin + path, { redirect: "manual" });
   const body = await response.text();
   // Next can encode a redirect in its streamed HTML after headers were sent.

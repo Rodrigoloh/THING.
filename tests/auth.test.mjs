@@ -70,14 +70,19 @@ test("email and password sign-in succeeds safely and hides wrong-password detail
 });
 
 test("password signup validates once and respects email verification", async () => {
-  let calls = 0, payload;
-  const auth = { signUp: async (value) => { calls++; payload = value; return { data: { user: { id: "new-user" }, session: null }, error: null }; } };
+  let calls = 0, otpCalls = 0, payload;
+  const auth = {
+    signUp: async (value) => { calls++; payload = value; return { data: { user: { id: "new-user" }, session: null }, error: null }; },
+    signInWithOtp: async () => { otpCalls++; throw new Error("Password signup must never call OTP"); },
+  };
   assert.deepEqual(await signUpWithPassword(auth, "bad", "12345678", "12345678", "https://thing.example"), { ok: false, error: "emailInvalid" });
   assert.deepEqual(await signUpWithPassword(auth, "person@example.com", "short", "short", "https://thing.example"), { ok: false, error: "passwordTooShort" });
   assert.deepEqual(await signUpWithPassword(auth, "person@example.com", "password1", "password2", "https://thing.example"), { ok: false, error: "passwordMismatch" });
   assert.equal(calls, 0);
   assert.deepEqual(await signUpWithPassword(auth, "person@example.com", "password1", "password1", "https://thing.example"), { ok: true, status: "verification_required", userId: "new-user" });
   assert.equal(calls, 1);
+  assert.equal(otpCalls, 0);
+  assert.deepEqual({ email: payload.email, password: payload.password }, { email: "person@example.com", password: "password1" });
   assert.equal(payload.options.emailRedirectTo, "https://thing.example/auth/callback");
 });
 
