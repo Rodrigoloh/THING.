@@ -158,6 +158,16 @@ export async function advanceChoiceEngine(hangoutId: string, game: 'know_me' | '
   } catch { return { ok: false, error: 'connection_failed' }; }
 }
 
+export async function submitKnowMeExplanation(hangoutId: string, roundId: string, body: string): Promise<Result<ChoiceSnapshot>> {
+  try {
+    const client = await getSupabaseServerClient();
+    const { error } = await client.rpc('submit_know_me_explanation', { p_hangout_id: hangoutId, p_round_id: roundId, p_body: body });
+    if (error) return { ok: false, error: flowError(error) };
+    const { data, error: snapshotError } = await client.rpc('know_me_snapshot', { p_hangout_id: hangoutId });
+    return snapshotError || !data ? { ok: false, error: flowError(snapshotError) } : { ok: true, data };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+
 export async function loadHot(hangoutId: string): Promise<Result<HotSnapshot>> {
   try {
     const { data, error } = await (await getSupabaseServerClient()).rpc('hot_snapshot', { p_hangout_id: hangoutId });
@@ -181,4 +191,5 @@ export async function submitHotRound(hangoutId: string, roundId: string, answerK
 export async function advanceHot(hangoutId: string) { return hotMutation(hangoutId, (client) => client.rpc('advance_hot', { p_hangout_id: hangoutId })); }
 export async function skipHotPrompt(hangoutId: string, roundId: string) { return hotMutation(hangoutId, (client) => client.rpc('skip_hot_prompt', { p_hangout_id: hangoutId, p_round_id: roundId })); }
 export async function submitHotEscalation(hangoutId: string, accept: boolean) { return hotMutation(hangoutId, (client) => client.rpc('submit_hot_escalation', { p_hangout_id: hangoutId, p_accept: accept })); }
+export async function submitHotReaction(hangoutId: string, roundId: string, actionKey: 'use_it' | 'respond' | 'skip') { return hotMutation(hangoutId, (client) => client.rpc('submit_hot_reaction', { p_hangout_id: hangoutId, p_round_id: roundId, p_action_key: actionKey })); }
 export async function completeHot(hangoutId: string) { return hotMutation(hangoutId, (client) => client.rpc('complete_hot', { p_hangout_id: hangoutId })); }

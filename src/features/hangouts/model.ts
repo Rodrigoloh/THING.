@@ -37,6 +37,7 @@ export type ChoiceRound = {
   prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string;
   subject_name: string | null; predictor_name: string | null; role: 'subject' | 'predictor' | 'voter';
   own_answer: 'a' | 'b' | null; answer_count: number; answers: ChoiceAnswer[];
+  explanation: string | null; can_explain: boolean;
 };
 export type KnowMeResult = { rounds: number; correct_predictions: number; predictions_by_user: Record<string, number> };
 export type ThisOrThatResult = { rounds: number; agreements: number; agreement_rate: number; votes_for_a: number; votes_for_b: number };
@@ -50,12 +51,15 @@ export type ChoiceSnapshot = {
 export type HotResult = { prompts_completed: number; highest_level: HotLevel; context: HotContext; reached_spicy: boolean; reached_kitkat: boolean };
 export type HotSnapshot = {
   id: string; thing_id: string; state: HangoutSnapshot['state']; color_key: import('@/features/things/model').ThingColor;
-  context: HotContext; current_level: HotLevel; notice: 'level_up' | 'staying_here' | null; kitkat_unlocked: boolean; completed_prompts: number;
-  members: { display_name: string }[];
+  context: HotContext; current_level: HotLevel; notice: 'level_up' | 'staying_here' | null; kitkat_unlocked: boolean; kitkat_first_discovery: boolean; completed_prompts: number;
+  members: { user_id: string; display_name: string }[];
   gate: { target_level: Exclude<HotLevel, 'flirty'>; own_vote: boolean | null; votes_cast: number } | null;
-  round: null | { id: string; number: number; state: 'answering' | 'revealed'; level: HotLevel; skipped: boolean; round_type: string;
+  round: null | { id: string; number: number; state: 'answering' | 'revealed'; level: HotLevel; skipped: boolean; round_type: 'reveal' | 'guess' | 'move'; reaction_type: 'respond' | 'use_it' | 'move'; prompt_id: string;
     prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string;
-    own_answer: 'a' | 'b' | null; answer_count: number; answers: { answer_key: 'a' | 'b'; is_self: boolean; display_name: string }[] };
+    subject_name: string; reactor_name: string; role: 'subject' | 'reactor'; can_answer: boolean;
+    own_answer: 'a' | 'b' | null; answer_count: number; answers: { answer_key: 'a' | 'b'; is_self: boolean; is_subject: boolean; display_name: string }[];
+    needs_reaction: boolean; can_react: boolean; reaction: 'use_it' | 'respond' | 'skip' | null;
+    callback: null | { subject_name: string; selected_option: 'a' | 'b'; option_en: string; option_es: string } };
   result: HotResult | null;
 };
 

@@ -1,6 +1,6 @@
 # Hangout foundation
 
-Migration `20260922000500_thing_home_hangouts_foundation.sql` adds the durable entry/setup layer. Migration 006 completes Same Brain, migration 007 guarantees one shared session, and `20260922000800_remaining_hangout_engines.sql` adds safe abandonment plus Know Me, This or That and Hot V1.
+Migration `20260922000500_thing_home_hangouts_foundation.sql` adds the durable entry/setup layer. Migration 006 completes Same Brain, migration 007 guarantees one shared session, migration 008 adds the remaining engines, and migration 009 refines Hot interaction/content plus Know Me discovery.
 
 ## Same Brain
 
@@ -26,9 +26,9 @@ Both clients poll the authoritative snapshot every 2.5 seconds. When either memb
 
 ## Shared engine pattern
 
-Know Me and This or That reuse `hangout_rounds`, private `hangout_answers`, the same `pending → answering → revealed` lifecycle and one shared set of eight server-selected prompts. The second answer reveals atomically; before that each snapshot contains only the caller's own answer. Their start and advance operations are idempotent and the final advance writes one durable result before releasing the Thing.
+Know Me and This or That reuse `hangout_rounds`, private `hangout_answers`, the same `pending → answering → revealed` lifecycle and one shared set of eight server-selected prompts. Know Me assigns asymmetric subject/predictor roles and supports a subject-only optional explanation after reveal. Their start and advance operations are idempotent and the final advance writes one durable result before releasing the Thing.
 
-Hot also uses the common rounds/answers tables, with a stored `hangouts.context`, per-round level and private escalation tables. Runtime prompt selection is server-side, active-only, excludes prompts already used in the session and accepts only `both` plus the stored `same_place`/`apart` context.
+Hot also uses the common rounds/answers tables, with a stored `hangouts.context`, per-round level and private escalation tables. Migration 009 adds subject alternation, durable reveals/reactions, exact approved level pools and lightweight recent-Hangout exclusion. See [Hot](hot.md) and [prompt import](prompts.md).
 
 ## Thing Home and lifecycle
 
@@ -44,6 +44,8 @@ Active Home shows the shared Charm/color/names, Start a Hangout, the functional 
 - `hot_deck_cards`: private Our Deck cards with deck/drawn/discard state. Direct selection exposes only a member's own cards.
 - `hangout_rounds` / `hangout_answers` / `hangout_results`: shared engine rounds, private answers and completed-only results.
 - `hangout_level_gates` / `hangout_level_votes`: resolved gates and private per-member Hot votes; clients cannot select either table.
+- `hot_reveals` / `hot_reactions`: member-only Hot payoff and use-it state used for resume and callbacks.
+- `know_me_explanations`: optional subject-authored, member-only text attached to a revealed Know Me round.
 
 ## RPC boundary
 
@@ -68,4 +70,4 @@ Each Our Deck participant can submit exactly three private cards and mark their 
 
 ## Deployment
 
-Apply migrations 005, 006, 007 and 008 once in order, then deploy the matching application commit. Migration 008 adds no environment variables, Auth redirects, service key or Realtime publication.
+Apply migration 009 after 008, import the approved master prompt export with the documented script, then deploy the matching application commit. No Realtime publication is required. The service-role key is needed only by the trusted import process and must never be added to Vercel's public environment.

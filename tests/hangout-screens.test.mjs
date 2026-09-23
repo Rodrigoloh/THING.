@@ -10,7 +10,7 @@ import { LocaleProvider } from '../src/lib/i18n/provider.tsx';
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier === './actions' && context.parentURL?.endsWith('/features/hangouts/screens.tsx')) {
-      const source = ['addHotCard', 'advanceChoiceEngine', 'advanceHot', 'advanceSameBrain', 'completeHot', 'createHangout', 'loadChoiceEngine', 'loadHot', 'loadSameBrain', 'readyHotBatch', 'skipHotPrompt', 'startChoiceEngine', 'startHot', 'startSameBrain', 'submitChoiceAnswer', 'submitHotEscalation', 'submitHotRound', 'submitSameBrainAnswer'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
+      const source = ['addHotCard', 'advanceChoiceEngine', 'advanceHot', 'advanceSameBrain', 'completeHot', 'createHangout', 'loadChoiceEngine', 'loadHot', 'loadSameBrain', 'readyHotBatch', 'skipHotPrompt', 'startChoiceEngine', 'startHot', 'startSameBrain', 'submitChoiceAnswer', 'submitHotEscalation', 'submitHotReaction', 'submitHotRound', 'submitKnowMeExplanation', 'submitSameBrainAnswer'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
       return { url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true };
     }
     if (specifier === '@/features/hangouts/actions' && context.parentURL?.endsWith('/components/thing/hangout-shell.tsx')) {

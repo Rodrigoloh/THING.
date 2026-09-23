@@ -22,6 +22,10 @@ export const hangoutCopy = {
     wannaBold: 'wanna turn it up?', wannaSpicy: 'keep going?', kitkatWait: 'wait…', kitkatMore: "there’s one more.",
     stayFlirty: 'stay flirty', goBold: 'go bold', stayBold: 'stay bold', goSpicy: 'go spicy', openKitkat: 'open KitKat', maybeNot: 'maybe not',
     stayingHere: 'staying here :)', levelUp: 'you both said yes.', waitingVote: 'waiting for their private choice…', prompts: 'prompts', reached: 'reached',
+    said: 'said', youGuessed: 'you guessed', wannaExplain: 'wanna say why?', addThought: 'add a thought', keepGoing: 'keep going →',
+    picked: 'picked', noted: 'noted.', yourMove: 'your move.', useIt: 'use it →', answerBack: 'answer back →', theirTurn: 'their turn →',
+    turn: "{name}'s turn", howWell: 'how well do you know {name}?', choosing: '{name} is choosing…', whatPicked: 'what do you think they picked?', waitingMove: 'waiting for {name} to react…',
+    rememberThis: 'remember this?', youFoundIt: 'you found it.', oneMoreDoor: 'one more door.',
   },
   es: {
     title: 'elijan un Hangout.', back: 'volver a su Thing', same_brain: 'Same Brain', know_me: 'Know Me', this_or_that: 'This or That', hot: 'Hot',
@@ -46,5 +50,9 @@ export const hangoutCopy = {
     wannaBold: '¿quieren subir el nivel?', wannaSpicy: '¿seguimos?', kitkatWait: 'espera…', kitkatMore: 'hay uno más.',
     stayFlirty: 'seguir coquetos', goBold: 'ir a atrevido', stayBold: 'seguir atrevidos', goSpicy: 'ir a picante', openKitkat: 'abrir KitKat', maybeNot: 'mejor no',
     stayingHere: 'nos quedamos aquí :)', levelUp: 'ambos dijeron que sí.', waitingVote: 'esperando su elección privada…', prompts: 'preguntas', reached: 'llegaron a',
+    said: 'dijo', youGuessed: 'tú adivinaste', wannaExplain: '¿quieres contar por qué?', addThought: 'agregar una idea', keepGoing: 'seguir →',
+    picked: 'eligió', noted: 'anotado.', yourMove: 'tu turno.', useIt: 'úsalo →', answerBack: 'responde →', theirTurn: 'su turno →',
+    turn: 'turno de {name}', howWell: '¿qué tanto conoces a {name}?', choosing: '{name} está eligiendo…', whatPicked: '¿qué crees que eligió?', waitingMove: 'esperando la reacción de {name}…',
+    rememberThis: '¿recuerdas esto?', youFoundIt: 'lo encontraron.', oneMoreDoor: 'una puerta más.',
   },
 } as const;

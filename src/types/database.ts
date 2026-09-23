@@ -120,9 +120,9 @@ export type Database = {
         Relationships: [];
       };
       game_prompts: {
-        Row: { id: string; game_type: GameType; round_type: string; prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string; mood: string; context: string; intensity: number; tags: string[]; adult: boolean; reveal_style: string; active: boolean };
-        Insert: { id?: string; game_type: GameType; round_type?: string; prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string; mood?: string; context?: string; intensity?: number; tags?: string[]; adult?: boolean; reveal_style?: string; active?: boolean };
-        Update: { active?: boolean; mood?: string; context?: string; intensity?: number; tags?: string[]; reveal_style?: string };
+        Row: { id: string; stable_id: string | null; game_type: GameType; level: HotLevel | null; status: 'draft' | 'approved' | 'retired'; reaction_type: 'respond' | 'use_it' | 'move'; round_type: string; prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string; mood: string; context: string; intensity: number; tags: string[]; adult: boolean; reveal_style: string; active: boolean };
+        Insert: { id?: string; stable_id?: string | null; game_type: GameType; level?: HotLevel | null; status?: 'draft' | 'approved' | 'retired'; reaction_type?: 'respond' | 'use_it' | 'move'; round_type?: string; prompt_en: string; prompt_es: string; option_a_en: string; option_a_es: string; option_b_en: string; option_b_es: string; mood?: string; context?: string; intensity?: number; tags?: string[]; adult?: boolean; reveal_style?: string; active?: boolean };
+        Update: { stable_id?: string | null; level?: HotLevel | null; status?: 'draft' | 'approved' | 'retired'; reaction_type?: 'respond' | 'use_it' | 'move'; round_type?: string; active?: boolean; mood?: string; context?: string; intensity?: number; tags?: string[]; reveal_style?: string };
         Relationships: [];
       };
       hangout_rounds: {
@@ -183,6 +183,7 @@ export type Database = {
       know_me_snapshot: { Args: { p_hangout_id: string }; Returns: ChoiceSnapshot };
       submit_know_me_answer: { Args: { p_hangout_id: string; p_round_id: string; p_answer_key: 'a' | 'b' }; Returns: undefined };
       advance_know_me_round: { Args: { p_hangout_id: string }; Returns: undefined };
+      submit_know_me_explanation: { Args: { p_hangout_id: string; p_round_id: string; p_body: string }; Returns: undefined };
       complete_know_me: { Args: { p_hangout_id: string }; Returns: KnowMeResult };
       start_this_or_that: { Args: { p_hangout_id: string }; Returns: undefined };
       this_or_that_snapshot: { Args: { p_hangout_id: string }; Returns: ChoiceSnapshot };
@@ -195,6 +196,7 @@ export type Database = {
       advance_hot: { Args: { p_hangout_id: string }; Returns: undefined };
       skip_hot_prompt: { Args: { p_hangout_id: string; p_round_id: string }; Returns: undefined };
       submit_hot_escalation: { Args: { p_hangout_id: string; p_accept: boolean }; Returns: undefined };
+      submit_hot_reaction: { Args: { p_hangout_id: string; p_round_id: string; p_action_key: 'use_it' | 'respond' | 'skip' }; Returns: undefined };
       complete_hot: { Args: { p_hangout_id: string }; Returns: import('@/features/hangouts/model').HotResult };
       space_snapshot: { Args: { p_thing_id: string }; Returns: SpaceSnapshot };
       is_active_thing_member: { Args: { target_thing_id: string }; Returns: boolean };

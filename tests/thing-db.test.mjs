@@ -56,6 +56,17 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
         await admin.query("insert into public.thing_charm_choices(thing_id,user_id,round,charm_key) values($1,$2,1,'moon')", [legacyTwo, legacyPartner]);
       }
     }
+    // Explicit test-only Hot pack. Production migration 009 intentionally
+    // deactivates provisional content and expects an approved master import.
+    for (const [level, prefix, intensity] of [['flirty', 'F', 1], ['bold', 'B', 2], ['spicy', 'S', 3], ['kitkat', 'K', 4]]) {
+      for (let index = 1; index <= 12; index++) {
+        const stableId = `HT-${prefix}-${String(index).padStart(3, '0')}`;
+        const roundType = ['reveal', 'guess', 'move'][(index - 1) % 3];
+        await admin.query(`insert into public.game_prompts(stable_id,game_type,level,status,round_type,reaction_type,prompt_en,prompt_es,option_a_en,option_a_es,option_b_en,option_b_es,context,intensity,tags,active)
+          values($1,'hot',$2,'approved',$3,$4,$5,$5,$6,$6,$7,$7,'both',$8,array['test_fixture'],true)`,
+          [stableId, level, roundType, roundType === 'move' ? 'move' : 'respond', `${level} prompt ${index}`, 'option a', 'option b', intensity]);
+      }
+    }
     await t.test('upgrade preserves pending drafts, assigns seats and preserves existing invites', async () => {
       const { rows } = await admin.query('select id,status from public.things where id=any($1::uuid[])', [[legacyOne, legacyTwo]]);
       assert.equal(rows.find((r) => r.id === legacyOne).status, 'pending_invite');
@@ -285,12 +296,20 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
         const hidden = await rpc(predictor, 'know_me_snapshot', [created.id]);
         assert.equal(hidden.round.own_answer, null); assert.deepEqual(hidden.round.answers, []); assert.doesNotMatch(JSON.stringify(hidden), /\"own_answer\":\"a\"/);
         await rpc(predictor, 'submit_know_me_answer', [created.id, round.id, index < 5 ? 'a' : 'b']);
-        assert.equal((await rpc(a, 'know_me_snapshot', [created.id])).round.answers.length, 2);
+        let revealed = await rpc(a, 'know_me_snapshot', [created.id]);
+        assert.equal(revealed.round.answers.length, 2);
+        if (index === 0) {
+          await rpc(subject, 'submit_know_me_explanation', [created.id, round.id, 'Quiet helps me reset.']);
+          revealed = await rpc(predictor, 'know_me_snapshot', [created.id]);
+          assert.equal(revealed.round.explanation, 'Quiet helps me reset.');
+          await assert.rejects(rpc(predictor, 'submit_know_me_explanation', [created.id, round.id, 'Not mine']), /round_unavailable/);
+        }
         await rpc(index % 2 ? joined.partner : a, 'advance_know_me_round', [created.id]);
       }
       const complete = await rpc(a, 'know_me_snapshot', [created.id]);
       assert.equal(complete.state, 'complete'); assert.equal(complete.result.correct_predictions, 5); assert.equal(complete.result.rounds, 8);
       assert.equal(Object.values(complete.result.predictions_by_user).reduce((sum, value) => sum + value, 0), 5);
+      assert.equal((await joined.outsider.client.query('select * from public.know_me_explanations')).rowCount, 0);
       await assert.rejects(rpc(a, 'abandon_hangout', [created.id]), /hangout_complete/);
       assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).active_hangout, null);
     });
@@ -349,12 +368,18 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       async function answerCurrent(id, advance = true) {
         let snapshot = await rpc(a, 'hot_snapshot', [id]);
         const roundId = snapshot.round.id;
-        await rpc(a, 'submit_hot_round', [id, roundId, 'a']);
-        const hidden = await rpc(joined.partner, 'hot_snapshot', [id]);
-        assert.equal(hidden.round.own_answer, null); assert.deepEqual(hidden.round.answers, []);
-        await rpc(joined.partner, 'submit_hot_round', [id, roundId, 'b']);
+        const subject = snapshot.round.role === 'subject' ? a : joined.partner;
+        const reactor = subject === a ? joined.partner : a;
+        await rpc(subject, 'submit_hot_round', [id, roundId, 'a']);
+        let hidden = await rpc(reactor, 'hot_snapshot', [id]);
+        if (snapshot.round.round_type === 'guess') {
+          assert.equal(hidden.round.own_answer, null); assert.deepEqual(hidden.round.answers, []);
+          await rpc(reactor, 'submit_hot_round', [id, roundId, 'b']);
+        }
         snapshot = await rpc(a, 'hot_snapshot', [id]);
-        assert.equal(snapshot.round.answers.length, 2);
+        assert.equal(snapshot.round.answers.length, snapshot.round.round_type === 'guess' ? 2 : 1);
+        assert.equal(snapshot.round.needs_reaction, true);
+        await rpc(reactor, 'submit_hot_reaction', [id, roundId, 'respond']);
         if (advance) await rpc(a, 'advance_hot', [id]);
       }
       async function acceptGate(id, target) {
@@ -395,6 +420,7 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       await rpc(joined.partner, 'abandon_hangout', [skipped.id]);
       assert.equal((await admin.query("select count(*)::int n from public.hangout_results r join public.hangouts h on h.id=r.hangout_id where h.thing_id=$1 and r.game_type='hot'", [joined.id])).rows[0].n, 0);
 
+      const completedHotPromptSets = [];
       for (const [sessionIndex, context] of ['same_place', 'apart', 'same_place'].entries()) {
         const id = await reachSpicy(context);
         if (sessionIndex === 0) {
@@ -407,6 +433,12 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
         const usedContexts = (await admin.query('select distinct p.context from public.hangout_rounds r join public.game_prompts p on p.id=r.prompt_id where r.hangout_id=$1', [id])).rows.map((row) => row.context);
         assert.ok(usedContexts.every((value) => value === 'both' || value === context));
         assert.equal((await admin.query('select count(*)=count(distinct prompt_id) unique_prompts from public.hangout_rounds where hangout_id=$1', [id])).rows[0].unique_prompts, true);
+        const selected = (await admin.query('select r.level,p.stable_id,p.status from public.hangout_rounds r join public.game_prompts p on p.id=r.prompt_id where r.hangout_id=$1', [id])).rows;
+        const prefixes = { flirty: 'HT-F-', bold: 'HT-B-', spicy: 'HT-S-', kitkat: 'HT-K-' };
+        assert.ok(selected.every((row) => row.status === 'approved' && row.stable_id.startsWith(prefixes[row.level])));
+        const promptSet = new Set(selected.map((row) => row.stable_id));
+        if (completedHotPromptSets.length) assert.equal([...promptSet].some((id) => completedHotPromptSets.at(-1).has(id)), false);
+        completedHotPromptSets.push(promptSet);
       }
       let space = await rpc(a, 'space_snapshot', [joined.id]);
       assert.equal(space.hot.spicy_hangouts, 3); assert.equal(space.hot.kitkat_unlocked, true);
@@ -416,13 +448,19 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       let gate = await rpc(a, 'hot_snapshot', [kitkat]);
       assert.equal(gate.gate.target_level, 'kitkat'); assert.equal(gate.kitkat_unlocked, true);
       await acceptGate(kitkat, 'kitkat');
+      assert.equal((await rpc(a, 'hot_snapshot', [kitkat])).kitkat_first_discovery, true);
       await answerCurrent(kitkat, false);
       const final = await rpc(joined.partner, 'complete_hot', [kitkat]);
       assert.equal(final.highest_level, 'kitkat'); assert.equal(final.reached_kitkat, true);
       space = await rpc(a, 'space_snapshot', [joined.id]);
       assert.equal(space.hot.highest_level, 'kitkat'); assert.equal(space.hot.hangouts, 4);
+      assert.ok((await admin.query('select kitkat_discovered_at from public.things where id=$1', [joined.id])).rows[0].kitkat_discovered_at);
+      const kitkatPrompts = (await admin.query("select p.stable_id from public.hangout_rounds r join public.game_prompts p on p.id=r.prompt_id where r.hangout_id=$1 and r.level='kitkat'", [kitkat])).rows;
+      assert.ok(kitkatPrompts.length > 0); assert.ok(kitkatPrompts.every((row) => row.stable_id.startsWith('HT-K-')));
       await assert.rejects(rpc(joined.outsider, 'hot_snapshot', [kitkat]), /hangout_unavailable/);
       await assert.rejects(joined.outsider.client.query('select * from public.hangout_level_votes'), /permission denied/);
+      assert.equal((await joined.outsider.client.query('select * from public.hot_reveals')).rowCount, 0);
+      assert.equal((await joined.outsider.client.query('select * from public.hot_reactions')).rowCount, 0);
     });
     await t.test('Same Brain keeps answers private, persists results and builds Space', async () => {
       async function playSession(matchCount) {

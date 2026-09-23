@@ -1,21 +1,38 @@
-# Hot V1
+# Hot
 
-## Context and prompts
+## Runtime content
 
-Standard Hot asks whether the two members are together or apart before creating the Hangout. The resulting `same_place` or `apart` value is stored on `hangouts.context` and cannot change during that session. Server selection uses active Hot prompts at the current intensity whose context is either `both` or the stored context, and excludes every prompt already used in that Hangout.
+Migration `20260923000900_refine_hot_and_know_me.sql` makes the master import the only production Hot source. Eligible rows must be `active`, have `status = 'approved'`, match the stored Hangout context (`both` or the exact `same_place`/`apart` value), and match both the exact level and stable-ID prefix:
 
-Every session starts Flirty. Rounds use the common private-answer/reveal lifecycle and expose universal Skip. Skip immediately replaces the prompt, does not count it as completed and cannot be disabled by a level decision.
+| Level | Required ID |
+| --- | --- |
+| Flirty | `HT-F-*` |
+| Bold | `HT-B-*` |
+| Spicy | `HT-S-*` |
+| KitKat | `HT-K-*` |
 
-## Mutual escalation
+There is no intensity-range or cross-level fallback. A missing eligible pool raises `prompt_pack_unavailable`; KitKat is never entered without an eligible `HT-K-*` row. The provisional Hot rows from migration 008 remain only for referential integrity and are inactive drafts.
 
-After two completed Flirty prompts, the server opens a private Bold gate. After two Bold prompts, it opens the Spicy gate. Each member votes independently; snapshots expose only the caller's vote and the number submitted. If both accept, the level increases. Otherwise it stays where it is and both see only “staying here :)”. A declined gate is not repeatedly reopened during the session.
+Within a Hangout, the unique round constraint and selector exclude every used prompt ID. The selector first excludes IDs used in the Thing's last two completed Hot Hangouts. If that leaves no eligible row, older prompts become available again while current-session IDs stay excluded.
 
-Spicy continues until the members finish, skip, or abandon. Finishing creates a completed result; End Hangout abandons it and creates no result.
+## Interaction loop
 
-## KitKat
+Every round has a focal subject, alternating Thing seat A/B. Metadata selects one simple interaction:
 
-KitKat is derived at the Thing level and remains unlocked once three previous completed Hot results have `reached_spicy = true`. Abandoned sessions never count and the UI exposes no unlock progress. In a later session, after two completed Spicy prompts, both members receive a separate private KitKat opt-in. Unlock is availability, not consent: both must accept before intensity 4 prompts can appear.
+- `reveal`: the subject chooses privately, then both see the subject's answer.
+- `guess`: the subject chooses first; only then may the other member predict. Neither sees the hidden answer before both submit.
+- `move`: the subject reveals and the other member receives a context-compatible use-it step.
 
-Completed Hot results store `prompts_completed`, `highest_level`, fixed `context`, `reached_spicy` and `reached_kitkat`. Recent activity shows only those summary fields and never prompt content.
+The durable loop is choose → reveal → react/use it → swap. `hot_reveals` stores the subject's selected option for resume and deterministic in-session callbacks. `hot_reactions` stores the other member's response/skip acknowledgement. A normal round cannot advance until that reaction is recorded. Universal prompt Skip remains available and bypasses the reaction without counting the prompt.
 
-The legacy Our Deck private-batch foundation remains available for existing data. Drawing/discard behavior is outside Hot V1.
+Every fourth eligible exchange may show a simple “remember this?” callback from an earlier reveal in the same Hangout. Prompt and response content never enters recent activity; completed results retain only counts, level, context and reached-level booleans.
+
+## Escalation and KitKat
+
+Bold and Spicy gates still appear after two completed exchanges at the current level. Votes remain private, both must accept and decline identity is never exposed.
+
+KitKat unlock availability belongs to the Thing after three **completed** Hot Hangouts whose result says `reached_spicy = true`. Abandoned sessions and sessions that never reached Spicy do not count, and no progress is displayed. In a later session, the members reach Spicy normally and complete two Spicy exchanges before the hidden 🍫 gate appears.
+
+Both members must privately accept. On first acceptance, `things.kitkat_discovered_at` is written once and the current Hangout records `kitkat_first_discovery`; later sessions use a lighter return reveal. Declining leaves the Hangout at Spicy without identifying who declined. The first KitKat prompt is selected only after this vote and must be `HT-K-*`.
+
+The legacy Our Deck batch foundation remains compatible and separate from standard Hot.

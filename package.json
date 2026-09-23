@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --import ./tests/register-tsx.mjs --test --test-concurrency=1 --test-force-exit tests/*.test.mjs"
+    "test": "node --import ./tests/register-tsx.mjs --test --test-concurrency=1 --test-force-exit tests/*.test.mjs",
+    "prompts:import": "node --experimental-strip-types scripts/import-game-prompts.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
