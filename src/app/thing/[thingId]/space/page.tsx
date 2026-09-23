@@ -1,7 +1,6 @@
-import { loadSpace } from '@/features/space/actions';
-import { SpaceScreen } from '@/features/space/screen';
+import { redirect } from 'next/navigation';
 
 export default async function SpacePage({ params }: { params: Promise<{ thingId: string }> }) {
   const { thingId } = await params;
-  return <SpaceScreen result={await loadSpace(thingId)} />;
+  redirect(`/thing/${encodeURIComponent(thingId)}`);
 }

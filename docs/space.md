@@ -1,6 +1,8 @@
 # Space V1
 
-Space is the shared scrapbook/stat surface for a Thing. Migration `20260922000600_same_brain_results_space.sql` replaces the placeholder with a member-only snapshot containing the shared Charm, names and color; completed-Hangout summary; Same Brain lifetime stats; and persistent souvenirs. Know Me, This or That and Hot intentionally show empty cards until their engines produce durable results.
+Space is the growing shared content of the canonical `/thing/[thingId]` page. Migration `20260922000600_same_brain_results_space.sql` supplies its member-only stats/souvenir snapshot; migration 007 folds that content into the Thing instead of maintaining a duplicate dashboard route. `/thing/[thingId]/space` remains as a compatibility redirect to the canonical page.
+
+The page flows vertically: minimal `THING. / •••` bar, medium shared Charm and names, up to four real quick stats, the strongest current Hangout action, result-aware recent activity, then persistent souvenirs. Settings, color swatches and destructive ending live only in the `•••` sheet. The layout leaves room below for future shared objects without implementing them now.
 
 ## Results and stats
 
@@ -34,3 +36,9 @@ They are quiet persistent objects in Space, not competitive rewards.
 All mutations run through locked security-definer RPCs that derive the Supabase account. RLS lets Hangout participants read rounds/results, hides the other answer until reveal and blocks direct client writes. Outsiders cannot read the Space snapshot, results or souvenirs.
 
 Deferred work includes the remaining three game engines, Realtime, full prompt-library import, freeform draggable Space, advanced analytics, public discovery and rewards.
+
+## Thing theme
+
+The accepted Charm initially maps cherry → cherry, moon → electric blue, spark → butter and clover → acid. `things.color_source` records `charm` or `manual`; `update_thing_color` sets it to manual so later Charm work cannot replace an explicit shared choice. Existing active Things are conservatively marked manual during migration 007 to preserve their current appearance.
+
+`ThingTheme` publishes `--thing-primary`, readable `--thing-on-primary` and derived soft/text/border/active tokens. The unified page, Hangout selector and Hangout shell consume those tokens while the base page remains neutral. Light accents use dark CTA text and darker accents use light CTA text.

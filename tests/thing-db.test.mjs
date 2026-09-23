@@ -186,23 +186,59 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       await assert.rejects(rpc(joined.partner, 'accept_thing_charm', [joined.id, 2]), /proposal_changed/);
     });
     await t.test('shared color is validated, visible to both members and hidden from outsiders', async () => {
-      assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).color_key, 'cherry');
+      let themed = await rpc(a, 'thing_snapshot', [joined.id]);
+      assert.equal(themed.color_key, 'butter'); assert.equal(themed.color_source, 'charm');
       await rpc(joined.partner, 'update_thing_color', [joined.id, 'purple']);
-      assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).color_key, 'purple');
+      themed = await rpc(a, 'thing_snapshot', [joined.id]);
+      assert.equal(themed.color_key, 'purple'); assert.equal(themed.color_source, 'manual');
       assert.equal((await rpc(joined.partner, 'thing_snapshot', [joined.id])).color_key, 'purple');
+      await admin.query("update public.things set charm_key='moon' where id=$1", [joined.id]);
+      assert.equal((await rpc(a, 'thing_snapshot', [joined.id])).color_key, 'purple');
       await assert.rejects(rpc(a, 'update_thing_color', [joined.id, 'rainbow']), /invalid_color/);
       await assert.rejects(rpc(joined.outsider, 'update_thing_color', [joined.id, 'acid']), /thing_unavailable/);
+      for (const [charm, color] of Object.entries({ cherry: 'cherry', moon: 'electric_blue', clover: 'acid' })) {
+        const themedDraft = await draft();
+        await inviteRpc(b, 'accept_thing_invite_v2', [themedDraft.code]);
+        await rpc(a, 'propose_thing_charm', [themedDraft.id, 0, charm]);
+        await rpc(b, 'accept_thing_charm', [themedDraft.id, 1]);
+        const snapshot = await rpc(a, 'thing_snapshot', [themedDraft.id]);
+        assert.equal(snapshot.color_key, color); assert.equal(snapshot.color_source, 'charm');
+        await admin.query('delete from public.things where id=$1', [themedDraft.id]);
+      }
     });
     let ourDeck;
-    await t.test('Hangouts require an active Thing, valid game and Thing membership', async () => {
+    await t.test('one open Hangout is shared, joinable, idempotent and race-safe', async () => {
       await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'unknown', null]), /invalid_game_type/);
       await assert.rejects(rpc(joined.outsider, 'create_hangout', [joined.id, 'same_brain', null]), /thing_unavailable/);
-      const hangoutId = await rpc(a, 'create_hangout', [joined.id, 'same_brain', null]);
-      const snapshot = await rpc(joined.partner, 'hangout_snapshot', [hangoutId]);
-      assert.equal(snapshot.game_type, 'same_brain'); assert.equal(snapshot.state, 'setup');
+      const created = await rpc(a, 'create_hangout', [joined.id, 'same_brain', null]);
+      assert.equal(created.created, true); assert.equal(created.joined, true);
+      let homeA = await rpc(a, 'thing_snapshot', [joined.id]);
+      let homeB = await rpc(joined.partner, 'thing_snapshot', [joined.id]);
+      assert.equal(homeA.active_hangout.id, created.id); assert.equal(homeA.active_hangout.current_user_joined, true); assert.equal(homeA.active_hangout.other_user_joined, false);
+      assert.equal(homeB.active_hangout.id, created.id); assert.equal(homeB.active_hangout.current_user_joined, false); assert.equal(homeB.active_hangout.other_user_joined, true);
+      const conflict = await rpc(joined.partner, 'create_hangout', [joined.id, 'hot', 'standard']);
+      assert.equal(conflict.id, created.id); assert.equal(conflict.conflict, true); assert.equal(conflict.joined, false);
+      assert.equal((await admin.query("select count(*)::int n from public.hangouts where thing_id=$1 and state in ('setup','waiting','ready','active')", [joined.id])).rows[0].n, 1);
+      await rpc(joined.partner, 'join_hangout', [created.id]);
+      await rpc(joined.partner, 'join_hangout', [created.id]);
+      const snapshot = await rpc(joined.partner, 'hangout_snapshot', [created.id]);
       assert.deepEqual(snapshot.members.map((member) => member.display_name), ['Creator', joined.partner === b ? 'Partner' : 'Outsider']);
-      await assert.rejects(rpc(joined.outsider, 'hangout_snapshot', [hangoutId]), /hangout_unavailable/);
+      homeB = await rpc(joined.partner, 'thing_snapshot', [joined.id]);
+      assert.equal(homeB.active_hangout.current_user_joined, true); assert.equal(homeB.active_hangout.other_user_joined, true);
+      await assert.rejects(rpc(joined.outsider, 'join_hangout', [created.id]), /hangout_unavailable/);
+      await assert.rejects(rpc(joined.outsider, 'hangout_snapshot', [created.id]), /hangout_unavailable/);
       await assert.rejects(a.client.query("insert into public.hangouts(thing_id,game_type) values($1,'same_brain')", [joined.id]), /permission denied/);
+      await admin.query("update public.hangouts set state='abandoned',completed_at=now() where id=$1", [created.id]);
+
+      const raced = await raceOnThing(joined.id, [
+        () => rpc(a, 'create_hangout', [joined.id, 'same_brain', null]),
+        () => rpc(joined.partner, 'create_hangout', [joined.id, 'same_brain', null]),
+      ]);
+      assert.equal(raced.filter((entry) => entry.status === 'fulfilled').length, 2);
+      assert.equal(raced[0].value.id, raced[1].value.id);
+      assert.equal((await admin.query("select count(*)::int n from public.hangouts where thing_id=$1 and state in ('setup','waiting','ready','active')", [joined.id])).rows[0].n, 1);
+      assert.equal((await admin.query('select count(*)::int n from public.hangout_members where hangout_id=$1', [raced[0].value.id])).rows[0].n, 2);
+      await admin.query("update public.hangouts set state='abandoned',completed_at=now() where id=$1", [raced[0].value.id]);
     });
     await t.test('Hot uses the lower shared consent and gates private Our Deck batches', async () => {
       assert.deepEqual(await rpc(a, 'hot_setup_snapshot', [joined.id]), { own_level: null, shared_level: null, both_ready: false, our_deck_available: false });
@@ -212,10 +248,12 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       assert.equal(setup.shared_level, 'bold'); assert.equal(setup.our_deck_available, false);
       await assert.rejects(rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck']), /our_deck_unavailable/);
       const standard = await rpc(a, 'create_hangout', [joined.id, 'hot', 'standard']);
-      assert.equal((await rpc(a, 'hangout_snapshot', [standard])).hot_level, 'bold');
+      assert.equal((await rpc(a, 'hangout_snapshot', [standard.id])).hot_level, 'bold');
+      await admin.query("update public.hangouts set state='abandoned',completed_at=now() where id=$1", [standard.id]);
       setup = await rpc(joined.partner, 'set_hot_consent', [joined.id, 'spicy']);
       assert.equal(setup.shared_level, 'spicy'); assert.equal(setup.our_deck_available, true);
-      ourDeck = await rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck']);
+      ourDeck = (await rpc(a, 'create_hangout', [joined.id, 'hot', 'our_deck'])).id;
+      await rpc(joined.partner, 'join_hangout', [ourDeck]);
       for (const text of ['one', 'two', 'three']) await rpc(a, 'add_hot_deck_card', [ourDeck, text]);
       for (const text of ['four', 'five', 'six']) await rpc(joined.partner, 'add_hot_deck_card', [ourDeck, text]);
       await assert.rejects(rpc(a, 'add_hot_deck_card', [ourDeck, 'extra']), /batch_full/);
@@ -236,11 +274,19 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
     });
     await t.test('Same Brain keeps answers private, persists results and builds Space', async () => {
       async function playSession(matchCount) {
-        const hangoutId = await rpc(a, 'create_hangout', [joined.id, 'same_brain', null]);
+        const hangoutId = (await rpc(a, 'create_hangout', [joined.id, 'same_brain', null])).id;
+        await rpc(a, 'start_same_brain', [hangoutId]);
         await rpc(a, 'start_same_brain', [hangoutId]);
         const rounds = (await admin.query('select id,prompt_id,round_number from public.hangout_rounds where hangout_id=$1 order by round_number', [hangoutId])).rows;
         assert.equal(rounds.length, 8);
         assert.equal(new Set(rounds.map((round) => round.prompt_id)).size, 8);
+        assert.equal((await rpc(a, 'same_brain_snapshot', [hangoutId])).state, 'waiting');
+        await assert.rejects(rpc(joined.partner, 'same_brain_snapshot', [hangoutId]), /hangout_unavailable/);
+        await rpc(joined.partner, 'join_hangout', [hangoutId]);
+        await rpc(joined.partner, 'join_hangout', [hangoutId]);
+        const firstA = await rpc(a, 'same_brain_snapshot', [hangoutId]);
+        const firstB = await rpc(joined.partner, 'same_brain_snapshot', [hangoutId]);
+        assert.equal(firstA.state, 'active'); assert.equal(firstA.round.id, firstB.round.id);
         for (const [index, expected] of rounds.entries()) {
           let snapshot = await rpc(a, 'same_brain_snapshot', [hangoutId]);
           assert.equal(snapshot.round.id, expected.id); assert.equal(snapshot.round.number, index + 1);
@@ -310,7 +356,7 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       assert.equal((await rpc(a, 'complete_same_brain', [perfect])).matches, 8);
       assert.equal((await admin.query('select count(*)::int n from public.thing_souvenirs where thing_id=$1', [joined.id])).rows[0].n, 4);
 
-      const incomplete = await rpc(a, 'create_hangout', [joined.id, 'same_brain', null]);
+      const incomplete = (await rpc(a, 'create_hangout', [joined.id, 'same_brain', null])).id;
       await rpc(a, 'start_same_brain', [incomplete]);
       assert.equal((await rpc(a, 'space_snapshot', [joined.id])).same_brain.hangouts, 3);
       await assert.rejects(rpc(joined.outsider, 'same_brain_snapshot', [incomplete]), /hangout_unavailable/);

@@ -2,6 +2,7 @@ export const gameTypes = ['same_brain', 'know_me', 'this_or_that', 'hot'] as con
 export type GameType = typeof gameTypes[number];
 export type HotLevel = 'flirty' | 'bold' | 'spicy';
 export type HotMode = 'standard' | 'our_deck';
+export type CreateHangoutResult = { id: string; game_type: GameType; created: boolean; joined: boolean; conflict: boolean };
 
 export type HotSetup = {
   own_level: HotLevel | null;
@@ -15,6 +16,7 @@ export type HangoutSnapshot = {
   thing_id: string;
   game_type: GameType;
   state: 'setup' | 'waiting' | 'ready' | 'active' | 'complete' | 'abandoned';
+  color_key: import('@/features/things/model').ThingColor;
   hot_level: HotLevel | null;
   hot_mode: HotMode | null;
   created_at: string;
@@ -59,6 +61,7 @@ export type SameBrainSnapshot = {
   id: string;
   thing_id: string;
   state: HangoutSnapshot['state'];
+  color_key: import('@/features/things/model').ThingColor;
   members: { display_name: string }[];
   round: SameBrainRound | null;
   result: SameBrainResult | null;

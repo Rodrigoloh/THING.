@@ -5,9 +5,10 @@ const root = await fetch(origin + "/");
 assert.equal(root.status, 200);
 const entry = await root.text();
 assert.match(entry, /Sign in/);
-assert.match(entry, /Use a code instead/);
+assert.match(entry, /Create account/);
+assert.match(entry, /something between two people\./);
 assert.doesNotMatch(entry, /Continue with Google/);
-console.log("PASS / renders authentication");
+console.log("PASS / renders the editorial authentication entry");
 
 for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/auth/update-password", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new", "/thing/test/hangout/test"]) {
   const response = await fetch(origin + path, { redirect: "manual" });

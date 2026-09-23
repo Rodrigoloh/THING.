@@ -8,7 +8,15 @@ Migration `20260922000500_thing_home_hangouts_foundation.sql` adds the durable e
 
 After a revealed round, `advance_same_brain_round` activates the next one. Advancing round eight completes the Hangout, writes `hangout_results`, copies the compact result to the existing `hangouts.result`, and unlocks qualifying souvenirs. The stored result includes raw matches/rounds plus `match_rate` and `best_match_streak`; no winner or compatibility score is calculated.
 
-The client polls every 2.5 seconds only while it is waiting/revealing, with an immediate refresh when the tab becomes visible. Realtime is unnecessary for this MVP.
+The client polls every 2.5 seconds while it is waiting/revealing, with an immediate refresh when the tab becomes visible. Realtime is unnecessary for this MVP.
+
+## One shared open Hangout
+
+Migration `20260922000700_shared_hangouts_and_theme.sql` adds a partial unique index on `hangouts(thing_id)` for `setup`, `waiting`, `ready` and `active`. Before creating the index it preserves the oldest existing open session and marks any duplicate open rows abandoned. Completed and abandoned rows never block a new Hangout.
+
+`create_hangout` locks the parent Thing. It creates and joins the caller when no session exists, returns and joins the same session for a matching simultaneous request, and returns a structured conflict pointing at the existing session for a different game. `join_hangout` is explicit and idempotent for the normal incoming CTA. Both functions derive the account, require an active parent Thing and accept only its two members. The creator can initialize Same Brain immediately; eight rounds are created once and the game waits until the second member joins, then becomes active. Refresh and the Thing-page polling resume the same database session.
+
+The shared `HangoutShell` supplies the compact back/title row and Thing theme tokens. Same Brain keeps its existing scoring and reveal behavior while using the shell, whitespace-led layout, large answer targets and themed selection/progress accents.
 
 ## Thing Home and lifecycle
 
@@ -44,4 +52,4 @@ Each Our Deck participant can submit exactly three private cards and mark their 
 
 ## Deployment
 
-Apply migration 005 once after migration 004 and migration 006 once after 005, then deploy the matching application commit. They add no environment variables, Auth redirects, email-template changes, service key or Realtime publication.
+Apply migrations 005, 006 and 007 once in order, then deploy the matching application commit. They add no environment variables, Auth redirects, email-template changes, service key or Realtime publication.

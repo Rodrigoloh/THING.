@@ -11,6 +11,9 @@ import { flowCopy } from '../src/features/things/copy.ts';
 
 registerHooks({
   resolve(specifier, context, next) {
+    if (specifier === '@/features/hangouts/actions' && context.parentURL?.endsWith('/features/things/screens.tsx')) {
+      return { url: 'data:text/javascript,' + encodeURIComponent("export async function joinHangout(){throw new Error('Actions must not run during render')}"), shortCircuit: true };
+    }
     if (specifier === './actions' && context.parentURL?.endsWith('/features/things/screens.tsx')) {
       const source = ['acceptCharm', 'acceptInvite', 'forgetInvite', 'manageInvite', 'proposeCharm', 'startThing', 'endThing', 'updateThingColor'].map((name) => `export async function ${name}(){throw new Error('Actions must not run during render')}`).join(';');
       return { url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true };
@@ -22,7 +25,7 @@ const { ThingsScreen, ThingScreen, JoinScreen, StartScreen } = await import('../
 function render(component, props, locale = 'en') {
   return renderToStaticMarkup(h(AppRouterContext.Provider, { value: { refresh() {}, replace() {} } }, h(LocaleProvider, { initialLocale: locale }, h(component, props))));
 }
-const pending = { id: 'test-thing', status: 'pending_invite', charm_key: null, color_key: 'cherry', created_by: 'creator', viewer_id: 'creator', members: [{ user_id: 'creator', display_name: 'Test Creator' }], proposal: null, invite: { code: 'ABC123', expires_at: '2030-01-01T00:00:00Z', expired: false }, recent_hangouts: [] };
+const pending = { id: 'test-thing', status: 'pending_invite', charm_key: null, color_key: 'cherry', color_source: 'charm', created_by: 'creator', viewer_id: 'creator', members: [{ user_id: 'creator', display_name: 'Test Creator' }], proposal: null, invite: { code: 'ABC123', expires_at: '2030-01-01T00:00:00Z', expired: false }, active_hangout: null, recent_hangouts: [] };
 const joined = { ...pending, status: 'pending_charm', invite: null, members: [...pending.members, { user_id: 'partner', display_name: 'Test Partner' }] };
 
 test('real list renders empty, pending invitation, pending Charm and active states', () => {
@@ -56,15 +59,27 @@ test('Charm proposal renders proposer, correct controls, waiting and final share
   const first = render(ThingScreen, { result: { ok: true, data: joined } });
   assert.equal((first.match(/type="radio"/g) ?? []).length, 4);
   assert.match(first, /disabled=""[^>]*>propose this Charm/);
-  const home = render(ThingScreen, { result: { ok: true, data: { ...joined, status: 'active', charm_key: 'clover' } } });
+  const active = { ...joined, status: 'active', charm_key: 'clover' };
+  const space = { thing_id: active.id, status: 'active', charm_key: 'clover', color_key: 'acid', members: active.members, total_completed_hangouts: 3, current_streak: 2, best_streak: 2, same_brain: { hangouts: 3, rounds: 24, matches: 16, lifetime_match_rate: 16 / 24, best_session_match_rate: 1, best_match_streak: 8 }, souvenirs: [{ key: 'FIRST_THOUGHT', unlocked_at: '2030-01-01T00:00:00Z', source_hangout_id: 'h1' }] };
+  const home = render(ThingScreen, { result: { ok: true, data: active }, spaceResult: { ok: true, data: space } });
   assert.match(home, /Test Creator \+ Test Partner/);
   assert.match(home, /🍀/);
   assert.match(home, /Start a Hangout/);
   assert.match(home, /nothing here yet/);
-  assert.match(home, /Thing settings/);
-  assert.match(home, /Change color/);
-  assert.match(home, /End this Thing/);
+  assert.match(home, /3 Hangouts/); assert.match(home, /67% Same Brain/); assert.match(home, /FIRST THOUGHT/);
+  assert.match(home, /aria-label="Thing settings"/);
+  assert.doesNotMatch(home, /Change color|End this Thing|href="\/thing\/test-thing\/space"|your thing\./i);
   assert.doesNotMatch(home, /type="radio"|share invite/);
+});
+test('canonical Thing CTA reflects incoming, waiting and active shared Hangouts', () => {
+  const base = { ...joined, status: 'active', charm_key: 'moon', color_key: 'electric_blue' };
+  const session = { id: 'hangout-1', game_type: 'same_brain', state: 'waiting', created_at: '2030-01-01T00:00:00Z', current_user_joined: false, other_user_joined: true };
+  const incoming = render(ThingScreen, { result: { ok: true, data: { ...base, active_hangout: session } } });
+  assert.match(incoming, /Same Brain/); assert.match(incoming, /is waiting for you/); assert.match(incoming, /Join Hangout/); assert.doesNotMatch(incoming, /Start a Hangout/);
+  const waiting = render(ThingScreen, { result: { ok: true, data: { ...base, active_hangout: { ...session, current_user_joined: true, other_user_joined: false } } } });
+  assert.match(waiting, /waiting for them/); assert.match(waiting, /Open Hangout/);
+  const playing = render(ThingScreen, { result: { ok: true, data: { ...base, active_hangout: { ...session, state: 'active', current_user_joined: true, other_user_joined: true } } } });
+  assert.match(playing, /in progress/); assert.match(playing, /Continue Hangout/);
 });
 test('disconnected Things are preserved as past and cannot start Hangouts', () => {
   const disconnected = { ...joined, status: 'disconnected', charm_key: 'moon' };
@@ -73,7 +88,7 @@ test('disconnected Things are preserved as past and cannot start Hangouts', () =
   assert.match(list, /disconnected/);
   const home = render(ThingScreen, { result: { ok: true, data: disconnected } });
   assert.match(home, /This Thing has ended/);
-  assert.doesNotMatch(home, /Start a Hangout|End this Thing/);
+  assert.doesNotMatch(home, /Start a Hangout|End this Thing|Thing settings/);
 });
 test('invite screen reserves a mobile QR and shows the six-character code with sharing controls', () => {
   const html = render(ThingScreen, { result: { ok: true, data: pending } });

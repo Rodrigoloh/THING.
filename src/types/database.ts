@@ -10,7 +10,7 @@ export type Profile = {
 };
 
 import type { ThingSnapshot, InvitePreview, InviteRpcResult, ThingColor } from '@/features/things/model';
-import type { GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup, SameBrainSnapshot, SameBrainResult } from '@/features/hangouts/model';
+import type { CreateHangoutResult, GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup, SameBrainSnapshot, SameBrainResult } from '@/features/hangouts/model';
 import type { SpaceSnapshot } from '@/features/space/model';
 export type ThingStatus = "pending_invite" | "pending_charm" | "active" | "disconnected";
 export type ThingMemberRole = "creator" | "member";
@@ -28,6 +28,7 @@ export type Thing = {
   charm_round: number;
   request_id: string | null;
   color_key: ThingColor;
+  color_source: 'charm' | 'manual';
 };
 
 export type ThingMember = {
@@ -60,8 +61,8 @@ export type Database = {
       };
       things: {
         Row: Thing;
-        Insert: { id?: string; created_by: string; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null; color_key?: ThingColor };
-        Update: { status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number; color_key?: ThingColor };
+        Insert: { id?: string; created_by: string; status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; created_at?: string; activated_at?: string | null; charm_round?: number; request_id?: string | null; color_key?: ThingColor; color_source?: 'charm' | 'manual' };
+        Update: { status?: ThingStatus; charm_key?: string | null; accent_color?: string | null; activated_at?: string | null; charm_round?: number; color_key?: ThingColor; color_source?: 'charm' | 'manual' };
         Relationships: [];
       };
       thing_members: {
@@ -167,7 +168,8 @@ export type Database = {
       end_thing: { Args: { p_thing_id: string }; Returns: undefined };
       hot_setup_snapshot: { Args: { p_thing_id: string }; Returns: HotSetup };
       set_hot_consent: { Args: { p_thing_id: string; p_level: HotLevel }; Returns: HotSetup };
-      create_hangout: { Args: { p_thing_id: string; p_game_type: GameType; p_hot_mode: HotMode | null }; Returns: string };
+      create_hangout: { Args: { p_thing_id: string; p_game_type: GameType; p_hot_mode: HotMode | null }; Returns: CreateHangoutResult };
+      join_hangout: { Args: { p_hangout_id: string }; Returns: undefined };
       hangout_snapshot: { Args: { p_hangout_id: string }; Returns: HangoutSnapshot };
       add_hot_deck_card: { Args: { p_hangout_id: string; p_content: string }; Returns: string };
       ready_hot_batch: { Args: { p_hangout_id: string }; Returns: undefined };

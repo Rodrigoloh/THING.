@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { flowError, type Result } from '@/features/things/model';
-import type { GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup, SameBrainSnapshot } from './model';
+import type { CreateHangoutResult, GameType, HangoutSnapshot, HotLevel, HotMode, HotSetup, SameBrainSnapshot } from './model';
 
 export async function loadHotSetup(thingId: string): Promise<Result<HotSetup>> {
   try {
@@ -21,12 +21,21 @@ export async function setHotConsent(thingId: string, level: HotLevel): Promise<R
   } catch { return { ok: false, error: 'connection_failed' }; }
 }
 
-export async function createHangout(thingId: string, gameType: GameType, hotMode: HotMode | null = null): Promise<Result<string>> {
+export async function createHangout(thingId: string, gameType: GameType, hotMode: HotMode | null = null): Promise<Result<CreateHangoutResult>> {
   try {
     const { data, error } = await (await getSupabaseServerClient()).rpc('create_hangout', { p_thing_id: thingId, p_game_type: gameType, p_hot_mode: hotMode });
     if (error || !data) return { ok: false, error: flowError(error) };
     revalidatePath(`/thing/${thingId}`);
     return { ok: true, data };
+  } catch { return { ok: false, error: 'connection_failed' }; }
+}
+
+export async function joinHangout(thingId: string, hangoutId: string): Promise<Result<string>> {
+  try {
+    const { error } = await (await getSupabaseServerClient()).rpc('join_hangout', { p_hangout_id: hangoutId });
+    if (error) return { ok: false, error: flowError(error) };
+    revalidatePath(`/thing/${thingId}`);
+    return { ok: true, data: hangoutId };
   } catch { return { ok: false, error: 'connection_failed' }; }
 }
 
@@ -88,7 +97,7 @@ export async function advanceSameBrain(hangoutId: string): Promise<Result<SameBr
     const { error } = await client.rpc('advance_same_brain_round', { p_hangout_id: hangoutId });
     if (error) return { ok: false, error: flowError(error) };
     revalidatePath('/thing/[thingId]/hangout/[hangoutId]', 'page');
-    revalidatePath('/thing/[thingId]/space', 'page');
+    revalidatePath('/thing/[thingId]', 'page');
     const { data, error: snapshotError } = await client.rpc('same_brain_snapshot', { p_hangout_id: hangoutId });
     return snapshotError || !data ? { ok: false, error: flowError(snapshotError) } : { ok: true, data };
   } catch { return { ok: false, error: 'connection_failed' }; }

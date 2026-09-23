@@ -5,14 +5,14 @@ import { useLocale } from "@/lib/i18n/provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { sendEmailCode, sendPasswordRecovery, signInWithPassword, signUpWithPassword, verifyEmailCode, type AuthErrorKey } from "./auth";
 
-type Mode = "login" | "signup" | "recovery" | "otp" | "otp-code";
+type Mode = "welcome" | "login" | "signup" | "recovery" | "otp" | "otp-code";
 const inputClass = "min-h-16 w-full rounded-2xl border border-border bg-surface px-5 text-base text-foreground placeholder:text-muted";
 const primary = "min-h-16 w-full rounded-2xl bg-accent px-5 text-base font-bold text-[#171717] disabled:opacity-50";
 const linkButton = "min-h-11 text-sm underline underline-offset-4";
 
 export function AuthScreen({ callbackError = false }: { callbackError?: boolean }) {
   const { t, locale, setLocale } = useLocale();
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(callbackError ? "login" : "welcome");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -67,11 +67,11 @@ export function AuthScreen({ callbackError = false }: { callbackError?: boolean 
       <button type="button" aria-label={t.english} aria-pressed={locale === "en"} onClick={() => setLocale("en")} className={`min-h-11 min-w-11 rounded-full text-xs font-bold tracking-widest ${locale === "en" ? "bg-foreground text-background" : "text-muted"}`}>EN</button>
       <button type="button" aria-label={t.spanish} aria-pressed={locale === "es"} onClick={() => setLocale("es")} className={`min-h-11 min-w-11 rounded-full text-xs font-bold tracking-widest ${locale === "es" ? "bg-foreground text-background" : "text-muted"}`}>ES</button>
     </div>
-    <div className="mb-10">
-      <div className="mb-8 flex h-20 items-center" aria-hidden="true"><span className="block h-17 w-17 rounded-full bg-accent" /><span className="-ml-4 block h-17 w-17 rounded-full border-[3px] border-foreground bg-background" /></div>
-      <h1 className="text-[clamp(4rem,18vw,6.5rem)] leading-[.85] font-black tracking-[-.085em]">THING<span className="text-accent">.</span></h1>
-      <p className="mt-5 text-lg leading-snug text-muted">{t.authTagline}</p>
-    </div>
+    {mode === "welcome" ? <div className="space-y-12 pb-4">
+      <div className="space-y-10"><p className="font-heading text-2xl font-black tracking-tight">THING.</p><h1 className="font-heading max-w-sm text-5xl leading-[.95] font-bold tracking-tight">{t.authTagline}</h1><div className="flex items-center justify-between border-y border-dotted border-border py-5 text-3xl" aria-hidden="true"><span>🍒</span><span>🌙</span><span>✨</span><span>🍀</span></div></div>
+      <div className="space-y-4"><p className="font-heading text-2xl font-bold lowercase">{t.startThing}.</p><button className={primary} onClick={() => switchMode("signup")}>{t.createAccount}</button><button className="min-h-16 w-full border border-border bg-surface px-5 font-bold" onClick={() => switchMode("login")}>{t.signIn}</button></div>
+    </div> : <>
+    <div className="mb-8"><p className="font-heading text-xl font-black tracking-tight">THING.</p><h1 className="mt-5 font-heading text-4xl font-bold tracking-tight">{mode === 'signup' ? t.createAccount.replace(' →', '') : mode === 'recovery' ? t.forgotPassword : mode === 'otp' || mode === 'otp-code' ? t.useCodeInstead : t.signIn.replace(' →', '')}</h1></div>
     <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       {mode === "otp-code" ? <>
         <p role="status" className="break-words text-sm text-muted">{t.codeSent} <strong className="text-foreground">{sentTo}</strong></p>
@@ -87,6 +87,6 @@ export function AuthScreen({ callbackError = false }: { callbackError?: boolean 
       {mode === "login" && <><button className={linkButton} onClick={() => switchMode("recovery")}>{t.forgotPassword}</button><button className={linkButton} onClick={() => switchMode("signup")}>{t.newHere} {t.createAccount}</button><button className={linkButton} onClick={() => switchMode("otp")}>{t.useCodeInstead}</button></>}
       {mode === "otp-code" && <><button className={linkButton} disabled={busy} onClick={() => { setMode("otp"); setError(null); }}>{t.resendCode}</button><button className={linkButton} onClick={() => { setSentTo(null); switchMode("otp"); }}>{t.changeEmail}</button></>}
       {mode !== "login" && mode !== "otp-code" && <button className={linkButton} onClick={() => switchMode("login")}>{t.backToSignIn}</button>}
-    </div>
+    </div></>}
   </div>;
 }

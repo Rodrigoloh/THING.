@@ -115,11 +115,11 @@ test("logout clears this browser session before returning to root; errors do not
   assert.equal(await logout({ signOut: async () => ({ error: { message: "private" } }) }, () => assert.fail()), "authFailed");
 });
 
-test("auth entry makes password primary in English and Spanish while OTP remains a fallback", () => {
-  for (const [locale, action, email, fallback] of [["en", "Sign in", "Email address", "Use a code instead"], ["es", "Iniciar sesión", "Correo electrónico", "Usar un código"]]) {
+test("auth entry opens with the editorial welcome and keeps account choices explicit", () => {
+  for (const [locale, action, create] of [["en", "Sign in", "Create account"], ["es", "Iniciar sesión", "Crear cuenta"]]) {
     const html = renderToStaticMarkup(React.createElement(LocaleProvider, { initialLocale: locale }, React.createElement(AuthScreen)));
-    assert.ok(html.includes(action)); assert.ok(html.includes(email)); assert.ok(html.includes(fallback));
-    assert.match(html, /type="email"/); assert.match(html, /type="password"/); assert.match(html, /aria-pressed="true"/);
+    assert.ok(html.includes(action)); assert.ok(html.includes(create)); assert.match(html, /THING\./); assert.match(html, /🍒.*🌙.*✨.*🍀/s);
+    assert.doesNotMatch(html, /type="email"|type="password"/); assert.match(html, /aria-pressed="true"/);
     assert.doesNotMatch(html, /Google|anonymous|anónimo|Theme|Tema|demo/i);
   }
 });

@@ -1,6 +1,6 @@
 # THING
 
-Mobile-first app for two people per Thing. Email/password authentication with email OTP fallback, required profiles, Start / Join / Charm proposal, Thing Home, the Hangout entry/setup flow, fully playable Same Brain and Space stats/souvenirs are implemented. The other game engines, chat, Moments, freeform Space and Discover remain outside this implementation.
+Mobile-first app for two people per Thing. Email/password authentication with email OTP fallback, required profiles, Start / Join / Charm proposal, one shared open Hangout, fully playable Same Brain and a unified Thing page with stats/souvenirs are implemented. The other game engines, chat, Moments, freeform shared objects and Discover remain outside this implementation.
 
 See [Thing flow implementation and deployment](docs/thing-flow.md) for migrations, RPCs, security, tests and hosted acceptance steps.
 
@@ -11,7 +11,7 @@ Requires Node.js 20.9+ for Next.js; use Node.js 22.15+ or 24+ for the test modul
 1. `npm install`.
 2. Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` using Supabase Connect. The supplied project API URL is `https://waziecvsylrcovrqavco.supabase.co`. Keep local credentials in the ignored `.env.local`.
 3. Configure providers, email templates and redirect URLs below.
-4. Apply missing files in `supabase/migrations/` in timestamp order: profiles (001), original Things foundation (002), functional Start/Join/Charm upgrade (003), invite/password/Charm refinement (004), Thing Home/Hangouts foundation (005), then Same Brain/Space (006). Do not rerun already applied migrations. See `docs/thing-flow.md` for rollout and test ordering.
+4. Apply missing files in `supabase/migrations/` in timestamp order through Same Brain/Space (006), then shared Hangouts/theme (007). Do not rerun already applied migrations. See `docs/thing-flow.md` for rollout and test ordering.
 5. `npm run dev`, then open `http://localhost:3000`.
 
 On PowerShell use `npm.cmd` if `npm.ps1` is blocked. Set the same two public variables in Vercel's relevant environments and redeploy; Next.js embeds public values at build time. No Google client secret or Supabase service key belongs in the app environment. Missing/invalid environment values fail clearly without echoing values. `.env.local` remains ignored.
@@ -97,6 +97,8 @@ The additive `20260922000300_thing_flow.sql` supplies the original functional AP
 
 `20260922000600_same_brain_results_space.sql` adds the first complete game engine: eight private Same Brain rounds with simultaneous reveal, durable raw results, four quiet souvenirs and a computed Space snapshot. Space aggregates only completed results and uses UTC calendar dates for the shared streak. See [Space](docs/space.md).
 
+`20260922000700_shared_hangouts_and_theme.sql` enforces one open Hangout per Thing, adds explicit/idempotent joining and exposes only a safe open-session summary. The canonical Thing page now includes its previous Space content. Shared color defaults from the accepted Charm and becomes manual after either member changes it.
+
 ## Profiles and avatars
 
 `profiles.id` references `auth.users.id`. A profile requires explicit submission of a trimmed 1-50-character display name and `en`/`es` locale. Avatars can be one of eight bundled SVG presets, initials, or JPEG/PNG/WebP up to 5 MiB. Upload happens only after form submission. Switching back to a preset before submitting does not upload the discarded photo.
@@ -118,7 +120,7 @@ node scripts/check-routes.mjs
 
 `CHECK_ORIGIN` can point the route check to another local test port. It performs only unauthenticated HTTP reads. Auth tests mock password sign-in/signup/update/recovery and OTP fallback, including safe failures, same-user updates, exact callback URLs, session reuse, identity projection, guest rejection, logout and EN/ES UI. Existing profile, avatar, locale, empty-dashboard and environment tests remain.
 
-The existing SQL files in `supabase/tests/` are preserved. `npm test` executes the original `things_rls.sql` against migration 002, then applies 003–006 and checks the RPC-only API, RLS, transactions and races. It covers short/legacy invites, Charm proposals, shared color, soft ending, Hangout access, Hot consent, private Our Deck batches, Same Brain privacy/results and Space aggregation. Do not run the original direct-write Things test against an upgraded database; it intentionally describes the old API.
+The existing SQL files in `supabase/tests/` are preserved. `npm test` executes the original `things_rls.sql` against migration 002, then applies 003–007 and checks the RPC-only API, RLS, transactions and races. It covers short/legacy invites, Charm proposals/theme derivation, the one-open-Hangout invariant, idempotent joining, Hot consent, private Our Deck batches, Same Brain privacy/results and unified Thing aggregation. Do not run the original direct-write Things test against an upgraded database; it intentionally describes the old API.
 
 ### Manual end-to-end verification after configuration
 
