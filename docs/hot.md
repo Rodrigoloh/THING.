@@ -31,8 +31,8 @@ Every fourth eligible exchange may show a simple “remember this?” callback f
 
 Bold and Spicy gates still appear after two completed exchanges at the current level. Votes remain private, both must accept and decline identity is never exposed.
 
-KitKat unlock availability belongs to the Thing after three **completed** Hot Hangouts whose result says `reached_spicy = true`. Abandoned sessions and sessions that never reached Spicy do not count, and no progress is displayed. In a later session, the members reach Spicy normally and complete two Spicy exchanges before the hidden 🍫 gate appears.
+Migration 011 stores repeatable progress in `things.kitkat_progress`. Each **completed** Hot Hangout whose result says `reached_spicy = true` counts once, regardless of how many Spicy exchanges it contained. Abandoned sessions and sessions that never reached Spicy do not count. Progress caps at 3 and can appear in the authorized Space summary. In a later session, the members reach Spicy normally and complete two Spicy exchanges before the hidden 🍫 gate appears.
 
-Both members must privately accept. On first acceptance, `things.kitkat_discovered_at` is written once and the current Hangout records `kitkat_first_discovery`; later sessions use a lighter return reveal. Declining leaves the Hangout at Spicy without identifying who declined. The first KitKat prompt is selected only after this vote and must be `HT-K-*`.
+Both members must privately accept. Displaying or declining the offer leaves progress at 3. Actual mutual entry resets progress to 0; the Hangout that consumes the cycle does not count toward the next one. On first entry, `things.kitkat_discovered_at` is written once and the current Hangout records `kitkat_first_discovery`; later sessions use a lighter return reveal. The permanent `KITKAT` souvenir remains after every gameplay reset. The first KitKat prompt is selected only after this vote and must be `HT-K-*`.
 
 The legacy Our Deck batch foundation remains compatible and separate from standard Hot.

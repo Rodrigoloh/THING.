@@ -11,7 +11,7 @@ Requires Node.js 20.9+ for Next.js; use Node.js 22.15+ or 24+ for the test modul
 1. `npm install`.
 2. Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` using Supabase Connect. The supplied project API URL is `https://waziecvsylrcovrqavco.supabase.co`. Keep local credentials in the ignored `.env.local`.
 3. Configure providers, email templates and redirect URLs below.
-4. Apply missing files in `supabase/migrations/` in timestamp order through the social Hub migration (010). Do not rerun already applied migrations. See `docs/thing-flow.md` for rollout and test ordering.
+4. Apply missing files in `supabase/migrations/` in timestamp order through the KitKat cycle migration (011). Do not rerun already applied migrations. If 010 is already installed, apply only 011. See `docs/thing-flow.md` for rollout and test ordering.
 5. `npm run dev`, then open `http://localhost:3000`.
 
 On PowerShell use `npm.cmd` if `npm.ps1` is blocked. Set the same two public variables in Vercel's relevant environments and redeploy; Next.js embeds public values at build time. No Google client secret or Supabase service key belongs in the app environment. Missing/invalid environment values fail clearly without echoing values. `.env.local` remains ignored.
