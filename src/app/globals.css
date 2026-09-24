@@ -57,3 +57,39 @@ button, a, select { -webkit-tap-highlight-color: transparent; }
 .thing-accent-border { border-color: var(--thing-accent-border); }
 .thing-option[aria-pressed="true"] { border-color: var(--thing-primary); background: var(--thing-primary-soft); }
 .font-heading { font-family: var(--font-space-grotesk), Arial, Helvetica, sans-serif; }
+
+.thing-poster {
+  isolation: isolate;
+  min-height: 15rem;
+}
+
+.thing-poster::after {
+  border: 1px solid var(--thing-accent-border);
+  content: "";
+  inset: .65rem -.35rem -.4rem .55rem;
+  pointer-events: none;
+  position: absolute;
+  transform: rotate(1deg);
+  z-index: -1;
+}
+
+.space-collage {
+  display: grid;
+  grid-auto-flow: dense;
+  grid-auto-rows: minmax(2.5rem, auto);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.paper-note {
+  background: color-mix(in srgb, var(--surface) 92%, var(--thing-primary));
+  box-shadow: 3px 4px 0 color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+@media (min-width: 768px) {
+  .space-collage { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .thing-poster { transition: transform 180ms ease; }
+  .thing-poster:hover { transform: translateY(-3px) rotate(-.25deg); }
+}

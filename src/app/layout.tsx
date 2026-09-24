@@ -19,7 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className={`${geist.variable} ${spaceGrotesk.variable} min-h-dvh antialiased`}>
         <LocaleProvider>
-          <div className="mx-auto w-full max-w-lg px-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto w-full max-w-6xl px-5 pb-[max(2rem,env(safe-area-inset-bottom))] sm:px-8">
             <AppHeader />
             <main id="main" className="pb-8">
               <IdentityProvider>

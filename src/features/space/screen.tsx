@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import type { ChatMessage } from '@/features/chat/model';
 import type { Moment } from '@/features/moments/model';
 import type { ThingSnapshot } from '@/features/things/model';
@@ -57,4 +58,43 @@ export function Milestones({ space }: { space: SpaceSnapshot }) {
     space.hot.highest_level === 'kitkat' ? 'KitKat found' : `${space.hot.kitkat_progress}/3 toward KitKat`,
   ];
   return <section className="space-y-4" aria-labelledby="milestones-title"><div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-muted">the ongoing bit</p><h2 id="milestones-title" className="font-heading text-3xl font-black">made together</h2></div><div className="flex flex-wrap gap-2">{items.map((item,index)=><span key={item} className={`rounded-full px-3 py-2 text-xs font-semibold ${index%2?'border border-[var(--thing-accent-border)]':'bg-[var(--thing-primary-soft)]'}`}>{item}</span>)}</div></section>;
+}
+
+export function SpaceCollage({ thing, space, messages, moments, activity }: { thing: ThingSnapshot; space: SpaceSnapshot | null; messages: ChatMessage[]; moments: Moment[]; activity: ReactNode }) {
+  const names=new Map(thing.members.map((member)=>[member.user_id,member.display_name]));
+  const sameBrain=space ? Math.round(space.same_brain.lifetime_match_rate*100) : 0;
+  const stats=space ? [
+    [space.current_streak,'day streak'],
+    [space.total_completed_hangouts,'hangouts'],
+    [`${sameBrain}%`,'same brain'],
+  ] : [];
+  const milestone=space ? (space.hot.highest_level==='kitkat' ? 'KitKat found' : `${space.hot.kitkat_progress}/3 toward KitKat`) : null;
+  const souvenirPlacements=['col-span-2 md:col-span-3 md:col-start-2','col-span-2 md:col-span-3 md:col-start-8','col-span-2 md:col-span-2 md:col-start-6'];
+  const photoPlacements=['col-span-3 row-span-3 md:col-span-5 md:col-start-7','col-span-2 row-span-2 md:col-span-3 md:col-start-2','col-span-2 md:col-span-3 md:col-start-9','col-span-3 md:col-span-4 md:col-start-5'];
+  return <section aria-labelledby="space-collage-title" className="space-y-7">
+    <div className="flex items-end justify-between gap-5"><div><p className="text-[10px] font-black uppercase tracking-[.24em] text-muted">your shared little universe</p><h2 id="space-collage-title" className="font-heading text-4xl font-black tracking-[-.04em] sm:text-5xl">the space</h2></div><span className="thing-accent-text -rotate-6 text-4xl" aria-hidden="true">✶</span></div>
+    <div className="space-collage gap-x-3 gap-y-8 sm:gap-x-5 sm:gap-y-12">
+      {stats.map(([value,label],index)=><div key={label} className={`${index===0?'col-span-2 md:col-span-3 md:col-start-1':index===1?'col-span-2 md:col-span-2 md:col-start-5':'col-span-3 col-start-2 md:col-span-3 md:col-start-9'} ${index===1?'rotate-2':'-rotate-1'} self-center text-center`}><strong className="thing-accent-text block font-heading text-5xl font-black leading-none sm:text-6xl">{value}</strong><span className="mt-2 block text-[10px] font-black uppercase tracking-[.18em] text-muted">{label}</span></div>)}
+
+      {space?.souvenirs.slice(0,3).map((souvenir,index)=>{const copy=getSouvenir(souvenir.key); return <figure key={souvenir.key} className={`${souvenirPlacements[index]} ${index%2?'rotate-2':'-rotate-2'} self-center text-center`}>
+        <object data={copy.assetPath} type="image/svg+xml" aria-label={copy.title} className="mx-auto block h-28 w-full object-contain sm:h-40"><span className="font-heading text-sm font-black">{copy.fallbackLabel}</span></object>
+        <figcaption className="mt-1 text-[10px] font-black uppercase tracking-[.12em]">{copy.fallbackLabel}</figcaption>
+      </figure>})}
+
+      {moments.slice(0,4).map((moment,index)=><Link key={moment.id} href={`/thing/${thing.id}/moments`} aria-label={moment.caption || 'Shared moment'} className={`${photoPlacements[index]} relative min-h-32 overflow-hidden border-[7px] border-surface bg-[var(--thing-primary-soft)] shadow-[3px_5px_0_rgba(0,0,0,.14)] ${index%2?'rotate-1':'-rotate-1'}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {moment.image_url?<img src={moment.image_url} alt={moment.caption||'Shared moment'} className="absolute inset-0 h-full w-full object-cover"/>:<span className="grid h-full place-items-center font-heading text-sm font-black">moment</span>}
+        {moment.caption&&<span className="absolute inset-x-0 bottom-0 bg-surface/90 px-2 py-1 text-xs font-semibold text-foreground">{moment.caption}</span>}
+      </Link>)}
+
+      {messages.slice(0,3).map((message,index)=><blockquote key={message.id} className={`paper-note ${index===0?'col-span-3 md:col-span-5 md:col-start-2':index===1?'col-span-3 col-start-2 md:col-span-4 md:col-start-8':'col-span-3 md:col-span-4 md:col-start-5'} ${index%2?'rotate-1':'-rotate-1'} self-center px-4 py-4 text-sm sm:px-6 sm:py-5 sm:text-base`}><p>“{message.body}”</p><footer className="mt-2 text-[9px] font-black uppercase tracking-[.16em] text-muted">{names.get(message.author_id)??'you two'}</footer></blockquote>)}
+
+      <div className="col-span-4 md:col-span-5 md:col-start-1">{activity}</div>
+      {space&&<div className="col-span-3 col-start-2 self-center border-y border-dashed border-[var(--thing-accent-border)] py-5 text-center md:col-span-4 md:col-start-8"><p className="font-heading text-2xl font-black">{milestone}</p><p className="mt-1 text-[10px] font-black uppercase tracking-[.16em] text-muted">the ongoing bit</p></div>}
+
+      {!moments.length&&<Link href={`/thing/${thing.id}/moments`} className="col-span-3 -rotate-1 border-y border-dashed border-border py-7 text-sm text-muted md:col-span-4 md:col-start-8">The first photo will land here. <span className="thing-accent-text font-bold">Add a moment →</span></Link>}
+      {!messages.length&&<Link href={`/thing/${thing.id}/chat`} className="paper-note col-span-3 col-start-2 rotate-1 px-5 py-6 text-sm text-muted md:col-span-4 md:col-start-3">Small words can live here. <span className="thing-accent-text font-bold">Write one →</span></Link>}
+    </div>
+    <div className="flex justify-end gap-6 text-xs font-black uppercase tracking-[.14em]"><Link href={`/thing/${thing.id}/chat`} className="underline decoration-[var(--thing-primary)] decoration-2 underline-offset-4">tiny notes</Link><Link href={`/thing/${thing.id}/moments`} className="underline decoration-[var(--thing-primary)] decoration-2 underline-offset-4">little moments</Link><span className="sr-only">souvenir shelf</span></div>
+  </section>;
 }

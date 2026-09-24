@@ -20,7 +20,7 @@ import { ThingTheme } from '@/components/thing/thing-theme';
 import type { SpaceSnapshot } from '@/features/space/model';
 import type { ChatMessage } from '@/features/chat/model';
 import type { Moment } from '@/features/moments/model';
-import { ChatFragments, Milestones, MomentsPreview, SouvenirShelf, StatStrip } from '@/features/space/screen';
+import { SpaceCollage } from '@/features/space/screen';
 import { CharmIcon, thingDisplayName } from '@/components/thing/charm-icon';
 import { getSouvenir } from '@/lib/souvenirs';
 
@@ -74,20 +74,33 @@ export function ThingsScreen({ result }: { result: Result<ThingSnapshot[]> }) {
   if (!result.data.length) return <EmptyThings />;
   const current = result.data.filter((thing) => thing.status !== 'disconnected');
   const past = result.data.filter((thing) => thing.status === 'disconnected');
-  const cards = (things: ThingSnapshot[]) => <ul className="space-y-3">{things.map((thing,index) => { const recent=thing.recent_hangouts[0]; const active=thing.active_hangout; const signal=active ? (!active.current_user_joined ? c.waitingForYou : active.other_user_joined ? `${hangoutCopy[locale][active.game_type]} · ${c.inProgress}` : c.waiting) : recent ? recent.game_type==='hot' ? `${hangoutCopy[locale].hot} · reached ${recent.result?.highest_level ?? 'warm'}` : `${hangoutCopy[locale][recent.game_type]} · ${recent.result?.matches ?? recent.result?.agreements ?? recent.result?.correct_predictions ?? recent.result?.prompts_completed ?? ''}${recent.result?.rounds ? `/${recent.result.rounds}` : ''}` : c[thing.status]; return <li key={thing.id}>
-    <ThingTheme color={thing.color_key}><Link href={`/thing/${thing.id}`} className="relative grid min-h-28 grid-cols-[76px_1fr_auto] items-center gap-4 overflow-hidden rounded-[26px] bg-surface px-4 py-4">
-      <span className="absolute inset-y-0 left-0 w-1.5 bg-[var(--thing-primary)]" aria-hidden="true" />
-      <span className="absolute right-10 top-1 font-heading text-4xl text-[var(--thing-primary-soft)]" aria-hidden="true">{index%2?'○':'✦'}</span>
-      <div className="relative grid h-[68px] w-[68px] place-items-center rounded-[45%_55%_50%_50%] bg-[var(--thing-primary-soft)]"><CharmIcon charm={thing.charm_key} size={58} /></div>
-      <div className="relative min-w-0"><p className="truncate font-heading text-xl font-black">{thingDisplayName(thing)}</p>{thing.nickname && <p className="truncate text-xs font-semibold text-muted">{thing.members.map((member) => member.display_name).join(' + ')}</p>}<p className="thing-accent-text mt-2 truncate text-xs font-bold uppercase tracking-[.08em]">{signal}</p></div>
-      <span aria-hidden="true" className="relative thing-accent-text text-2xl">↗</span>
-    </Link></ThingTheme>
-  </li>; })}</ul>;
-  return <Screen title={c.title}>
+  const cards = (things: ThingSnapshot[], featured = false) => <ul className={`${featured && things.length > 1 ? 'grid gap-x-8 gap-y-12 md:grid-cols-2' : 'space-y-10'}`}>{things.map((thing,index) => {
+    const recent=thing.recent_hangouts[0];
+    const active=thing.active_hangout;
+    const signal=active ? (!active.current_user_joined ? c.waitingForYou : active.other_user_joined ? `${hangoutCopy[locale][active.game_type]} · ${c.inProgress}` : c.waiting) : recent ? recent.game_type==='hot' ? `${hangoutCopy[locale].hot} · reached ${recent.result?.highest_level ?? 'warm'}` : `${hangoutCopy[locale][recent.game_type]} · ${recent.result?.matches ?? recent.result?.agreements ?? recent.result?.correct_predictions ?? recent.result?.prompts_completed ?? ''}${recent.result?.rounds ? `/${recent.result.rounds}` : ''}` : c[thing.status];
+    const isSolo = featured && things.length === 1;
+    return <li key={thing.id} className={isSolo ? 'md:max-w-3xl' : ''}>
+      <ThingTheme color={thing.color_key}><Link href={`/thing/${thing.id}`} className={`thing-poster relative grid overflow-hidden border-y border-[var(--thing-accent-border)] bg-surface px-5 py-6 ${isSolo ? 'min-h-[22rem] grid-cols-[minmax(0,1fr)_9rem] sm:grid-cols-[minmax(0,1fr)_15rem] sm:px-9 sm:py-8' : 'grid-cols-[minmax(0,1fr)_7rem]'}`}>
+        <span className="absolute -left-2 top-3 font-heading text-[5.5rem] font-black leading-none text-[var(--thing-primary-soft)]" aria-hidden="true">{String(index+1).padStart(2,'0')}</span>
+        <span className="absolute right-4 top-3 rotate-6 font-heading text-xs font-black uppercase tracking-[.2em] thing-accent-text" aria-hidden="true">{index%2 ? 'made together' : 'you two'}</span>
+        <div className="relative z-10 flex min-w-0 flex-col justify-end self-stretch pt-14">
+          <p className={`${isSolo ? 'text-4xl sm:text-6xl' : 'text-3xl'} break-words font-heading font-black leading-[.9] tracking-[-.04em]`}>{thingDisplayName(thing)}</p>
+          {thing.nickname && <p className="mt-3 truncate text-sm font-semibold text-muted">{thing.members.map((member) => member.display_name).join(' + ')}</p>}
+          <p className="thing-accent-text mt-7 max-w-xs text-[11px] font-black uppercase tracking-[.14em]">{signal}</p>
+        </div>
+        <div className="relative z-10 grid place-items-center self-center">
+          <span className="absolute h-24 w-24 rounded-full border border-dashed border-[var(--thing-accent-border)] sm:h-36 sm:w-36" aria-hidden="true" />
+          <CharmIcon charm={thing.charm_key} size={isSolo ? 168 : 108} className="relative -rotate-2 drop-shadow-[3px_5px_0_rgba(0,0,0,.12)]" />
+        </div>
+        <span className="absolute bottom-5 right-5 thing-accent-text text-2xl" aria-hidden="true">↗</span>
+      </Link></ThingTheme>
+    </li>;
+  })}</ul>;
+  return <Screen title={c.title} wide>
     <Sync enabled={result.data.some((thing) => thing.status.startsWith('pending_'))} />
-    {cards(current)}
-    <div className="grid grid-cols-2 gap-3"><ActionLink href="/things/new">+ {c.start.replace('→','')}</ActionLink><ActionLink href="/join" secondary>{c.join}</ActionLink></div>
-    {!!past.length && <details><summary className="min-h-11 cursor-pointer text-sm font-semibold uppercase tracking-[.16em] text-muted">{c.pastThings} · {past.length}</summary>{cards(past)}</details>}
+    {cards(current, true)}
+    <div className="flex flex-wrap gap-x-7 gap-y-2 border-t border-dashed border-border pt-7"><Link href="/things/new" className="inline-flex min-h-14 items-center bg-accent px-6 font-heading text-sm font-black text-[#171717]">+ {c.start.replace('→','')}</Link><Link href="/join" className="min-h-14 content-center font-heading text-sm font-bold underline decoration-2 underline-offset-8">{c.join} ↗</Link></div>
+    {!!past.length && <details className="pt-5"><summary className="min-h-11 cursor-pointer font-heading text-sm font-black uppercase tracking-[.16em] text-muted">{c.pastThings} · {past.length}</summary><div className="mt-7 opacity-70">{cards(past)}</div></details>}
   </Screen>;
 }
 
@@ -177,13 +190,13 @@ function ActiveThingHome({ thing, spaceResult, chatPreview, momentsPreview }: { 
       if (!result.ok) setJoinError(result.error); else router.push(`/thing/${thing.id}/hangout/${active.id}`);
     });
   }
-  return <ThingTheme color={thing.color_key} className="space-y-12 pb-16">
+  return <ThingTheme color={thing.color_key} className="mx-auto max-w-5xl space-y-14 pb-16">
     <Sync enabled={thing.status === 'active' && !!active} />
-    <header className="flex items-center justify-between py-5"><Link href="/things" className="font-heading text-lg font-black tracking-tight">THING.</Link>{thing.status === 'active' && <button className="min-h-11 min-w-11 text-xl font-bold" aria-label={c.settings} onClick={() => setSettingsOpen(true)}>•••</button>}</header>
-    <section className="relative text-center" aria-labelledby="space-title">
-      <span className="absolute left-[8%] top-20 rotate-[-12deg] text-4xl thing-accent-text" aria-hidden="true">✦</span><span className="absolute right-[7%] top-28 rotate-12 text-3xl thing-accent-text" aria-hidden="true">○</span><span className="absolute right-[18%] top-4 rotate-6 font-heading text-xs font-black uppercase tracking-[.2em] thing-accent-text" aria-hidden="true">ours</span>
-      <p className="text-[10px] font-bold uppercase tracking-[.24em] text-muted">your shared little universe</p><h1 id="space-title" className="mt-2 font-heading break-words text-4xl font-black tracking-tight">{thingDisplayName(thing)}</h1>{thing.nickname&&<p className="mt-2 text-sm font-semibold text-muted">{thing.members.map((member)=>member.display_name).join(' + ')}</p>}
-      <div className="relative mx-auto mt-6 grid h-48 w-48 place-items-center rounded-full bg-[var(--thing-primary-soft)]"><span className="absolute inset-3 rounded-full border border-dashed border-[var(--thing-accent-border)]" aria-hidden="true"/><CharmIcon charm={thing.charm_key} size={156} className="relative" /></div>
+    <header className="flex items-center justify-between py-5"><Link href="/things" className="font-heading text-2xl font-black tracking-[-.06em]">THING.</Link>{thing.status === 'active' && <button className="min-h-11 min-w-11 text-xl font-bold" aria-label={c.settings} onClick={() => setSettingsOpen(true)}>•••</button>}</header>
+    <section className="relative min-h-[21rem] text-center sm:min-h-[25rem]" aria-labelledby="space-title">
+      <span className="absolute left-[5%] top-28 rotate-[-12deg] text-4xl thing-accent-text" aria-hidden="true">✦</span><span className="absolute right-[6%] top-36 rotate-12 text-3xl thing-accent-text" aria-hidden="true">○</span><span className="absolute right-[15%] top-3 rotate-6 font-heading text-xs font-black uppercase tracking-[.2em] thing-accent-text" aria-hidden="true">ours</span>
+      <h1 id="space-title" className="mx-auto max-w-3xl font-heading break-words text-5xl font-black leading-[.9] tracking-[-.05em] sm:text-7xl">{thingDisplayName(thing)}</h1>{thing.nickname&&<p className="mt-3 text-sm font-semibold text-muted">{thing.members.map((member)=>member.display_name).join(' + ')}</p>}
+      <div className="relative mx-auto mt-7 grid h-52 w-52 place-items-center sm:h-60 sm:w-60"><span className="absolute h-40 w-64 -rotate-6 rounded-[50%] border border-dashed border-[var(--thing-accent-border)] sm:h-44 sm:w-80" aria-hidden="true"/><span className="absolute h-64 w-36 rotate-12 rounded-[50%] border border-[var(--thing-accent-border)] opacity-60" aria-hidden="true"/><CharmIcon charm={thing.charm_key} size={190} className="relative -rotate-2 drop-shadow-[4px_7px_0_rgba(0,0,0,.13)] sm:scale-110" /></div>
     </section>
     <div className="space-y-4">
       {thing.status === 'active' ? <section className="mx-auto max-w-md space-y-3" aria-label="Current Hangout">
@@ -191,16 +204,9 @@ function ActiveThingHome({ thing, spaceResult, chatPreview, momentsPreview }: { 
         {!active ? <ActionLink href={`/thing/${thing.id}/hangout/new`} themed>{c.startHangout}</ActionLink> : active.current_user_joined ? <ActionLink href={`/thing/${thing.id}/hangout/${active.id}`} themed>{active.other_user_joined ? c.continueHangout : c.openHangout}</ActionLink> : <button className="thing-primary-button min-h-14 w-full px-5 py-4 font-semibold disabled:opacity-50" disabled={joining} onClick={join}>{joining ? c.busy : c.joinHangout}</button>}
         <ErrorMessage error={joinError} />
       </section> : <p className="border-y border-border py-5 text-center font-semibold">{c.ended}</p>}
-      <nav aria-label="Thing tools" className="mx-auto grid max-w-md grid-cols-2 gap-3"><Link className="min-h-11 content-center rounded-full border border-[var(--thing-accent-border)] px-4 text-center font-heading text-sm font-bold" href={`/thing/${thing.id}/chat`}>chat <span aria-hidden="true">↗</span></Link><Link className="min-h-11 content-center rounded-full bg-[var(--thing-primary-soft)] px-4 text-center font-heading text-sm font-bold" href={`/thing/${thing.id}/moments`}>moments <span aria-hidden="true">↗</span></Link></nav>
+      <nav aria-label="Thing tools" className="mx-auto flex max-w-md justify-center gap-8 border-b border-dashed border-[var(--thing-accent-border)] pb-5"><Link className="min-h-11 content-center font-heading text-sm font-black underline decoration-[var(--thing-primary)] decoration-2 underline-offset-8" href={`/thing/${thing.id}/chat`}>chat <span aria-hidden="true">↗</span></Link><Link className="min-h-11 content-center font-heading text-sm font-black underline decoration-[var(--thing-primary)] decoration-2 underline-offset-8" href={`/thing/${thing.id}/moments`}>moments <span aria-hidden="true">↗</span></Link></nav>
     </div>
-    {space && <StatStrip space={space} />}
-    <div className="space-y-16">
-      <RecentActivity thing={thing} />
-      {space && <SouvenirShelf space={space} />}
-      <MomentsPreview thingId={thing.id} moments={moments} />
-      <ChatFragments thing={thing} messages={messages} />
-      {space && <Milestones space={space} />}
-    </div>
+    <SpaceCollage thing={thing} space={space} moments={moments} messages={messages} activity={<RecentActivity thing={thing} />} />
     {thing.status === 'active' && <ThingSettings thing={thing} open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
   </ThingTheme>;
 }
