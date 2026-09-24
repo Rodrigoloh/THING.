@@ -10,7 +10,7 @@ assert.match(entry, /something between two people\./);
 assert.doesNotMatch(entry, /Continue with Google/);
 console.log("PASS / renders the editorial authentication entry");
 
-for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/auth/update-password", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/space", "/thing/test/hangout/new", "/thing/00000000-0000-0000-0000-000000000000/hangout/00000000-0000-0000-0000-000000000000"]) {
+for (const path of ["/things", "/things/new", "/profile/create", "/profile/settings", "/auth/update-password", "/join", "/join/test", "/thing/test", "/thing/test/chat", "/thing/test/moments", "/thing/test/hangout/new", "/thing/00000000-0000-0000-0000-000000000000/hangout/00000000-0000-0000-0000-000000000000"]) {
   const response = await fetch(origin + path, { redirect: "manual" });
   const body = await response.text();
   // Next can encode a redirect in its streamed HTML after headers were sent.
@@ -20,6 +20,12 @@ for (const path of ["/things", "/things/new", "/profile/create", "/profile/setti
   assert.doesNotMatch(body, /<h1[^>]*>[^<]*(?:your things|make it yours|Account settings|Your Thing)/i);
   console.log(`PASS ${path} requires authentication`);
 }
+const legacySpace = await fetch(origin + "/thing/test/space", { redirect: "manual" });
+const legacySpaceBody = await legacySpace.text();
+const legacyHeaderRedirect = [303, 307, 308].includes(legacySpace.status) && legacySpace.headers.get("location") === "/thing/test";
+const legacyStreamRedirect = legacySpace.status === 200 && legacySpaceBody.includes("NEXT_REDIRECT;replace;/thing/test;");
+assert.ok(legacyHeaderRedirect || legacyStreamRedirect);
+console.log("PASS legacy /space redirects to the canonical Thing Space");
 
 for (const suffix of ["", "?error=access_denied&error_description=private-provider-details", "?next=https://example.com"]) {
   const response = await fetch(origin + "/auth/callback" + suffix, { redirect: "manual" });

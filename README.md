@@ -95,7 +95,7 @@ The additive `20260922000300_thing_flow.sql` supplies the original functional AP
 
 `20260922000500_thing_home_hangouts_foundation.sql` adds a closed shared color palette, member-only soft ending, Hangouts/participants, private Hot consent and private Our Deck batches. Active Home now shows identity, Start a Hangout, Space, real recent activity and compact settings. Disconnected Things are preserved under Past Things. See [Hangout foundation](docs/hangouts.md) for schema, privacy and deferred game-engine work.
 
-`20260922000600_same_brain_results_space.sql` adds the first complete game engine: eight private Same Brain rounds with simultaneous reveal, durable raw results, four quiet souvenirs and a computed Space snapshot. Space aggregates only completed results and uses UTC calendar dates for the shared streak. See [Space](docs/space.md).
+`20260922000600_same_brain_results_space.sql` adds the first complete game engine: eight private Same Brain rounds with simultaneous reveal, durable raw results, four quiet souvenirs and a computed Space snapshot. The canonical Thing page renders that Space alongside member-only Chat and Moments previews; the legacy `/space` route redirects there. Space aggregates only completed results and uses UTC calendar dates for the shared streak. See [Space](docs/space.md).
 
 `20260922000700_shared_hangouts_and_theme.sql` enforces one open Hangout per Thing, adds explicit/idempotent joining and exposes only a safe open-session summary. The canonical Thing page now includes its previous Space content. Shared color defaults from the accepted Charm and becomes manual after either member changes it.
 

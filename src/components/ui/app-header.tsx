@@ -11,6 +11,7 @@ export function AppHeader() {
     <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-surface focus:p-4">{t.skip}</a>
     {pathname !== "/" && !isThingHome && <header className="flex items-center justify-between gap-4 py-6">
       <Link href="/" aria-label={t.home} className="py-3 text-lg font-bold tracking-tight">THING.</Link>
+      {pathname === "/things" && <Link href="/profile/settings" className="min-h-11 content-center text-xs font-bold uppercase tracking-[.12em] text-muted">account / settings</Link>}
     </header>}
   </>;
 }

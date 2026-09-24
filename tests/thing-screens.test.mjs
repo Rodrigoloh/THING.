@@ -59,16 +59,24 @@ test('Charm proposal renders proposer, correct controls, waiting and final share
   const first = render(ThingScreen, { result: { ok: true, data: joined } });
   assert.equal((first.match(/type="radio"/g) ?? []).length, 12);
   assert.match(first, /disabled=""[^>]*>propose this Charm/);
-  const active = { ...joined, status: 'active', charm_key: 'clover' };
-  const space = { thing_id: active.id, status: 'active', charm_key: 'clover', color_key: 'acid', members: active.members, total_completed_hangouts: 3, current_streak: 2, best_streak: 2, same_brain: { hangouts: 3, rounds: 24, matches: 16, lifetime_match_rate: 16 / 24, best_session_match_rate: 1, best_match_streak: 8 }, souvenirs: [{ key: 'FIRST_THOUGHT', unlocked_at: '2030-01-01T00:00:00Z', source_hangout_id: 'h1' }] };
-  const home = render(ThingScreen, { result: { ok: true, data: active }, spaceResult: { ok: true, data: space } });
-  assert.match(home, /Test Creator \+ Test Partner/);
+  const active = { ...joined, nickname: 'Lucky Orbit', status: 'active', charm_key: 'clover' };
+  const space = { thing_id: active.id, status: 'active', charm_key: 'clover', color_key: 'acid', members: active.members, total_completed_hangouts: 3, current_streak: 2, best_streak: 2, same_brain: { hangouts: 3, rounds: 24, matches: 16, lifetime_match_rate: 16 / 24, best_session_match_rate: 1, best_match_streak: 8 }, know_me:{predictions:8,correct:6,accuracy:.75,best_session_rate:.75}, this_or_that:{rounds:8,agreements:5,agreement_rate:.625}, hot:{hangouts:1,spicy_hangouts:1,highest_level:'spicy',kitkat_progress:1,kitkat_unlocked:false}, souvenirs: [{ key: 'FIRST_THOUGHT', unlocked_at: '2030-01-01T00:00:00Z', source_hangout_id: 'h1' }] };
+  const home = render(ThingScreen, { result: { ok: true, data: active }, spaceResult: { ok: true, data: space }, chatPreview:{ok:true,data:[{id:'m1',thing_id:active.id,author_id:'creator',body:'keep this one',created_at:'2030-01-02T00:00:00Z'}]}, momentsPreview:{ok:true,data:[{id:'p1',thing_id:active.id,author_id:'creator',storage_path:'p',caption:'night out',created_at:'2030-01-03T00:00:00Z',image_url:'https://example.test/photo.jpg'}]} });
+  assert.match(home, /Lucky Orbit/); assert.match(home, /Test Creator \+ Test Partner/);
   assert.match(home, /alt="Clover"/);
   assert.match(home, /Start a Hangout/);
-  assert.match(home, /3 Hangouts/); assert.match(home, /href="\/thing\/test-thing\/chat"/); assert.match(home, /href="\/thing\/test-thing\/moments"/); assert.match(home, /href="\/thing\/test-thing\/space"/);
+  assert.match(home, /your shared little universe/); assert.match(home, /souvenir shelf/); assert.match(home, /little moments/); assert.match(home, /tiny notes/); assert.match(home, /keep this one/);
+  assert.match(home, /3<\/strong><span[^>]*>hangouts/); assert.match(home, /href="\/thing\/test-thing\/chat"/); assert.match(home, /href="\/thing\/test-thing\/moments"/); assert.doesNotMatch(home, /href="\/thing\/test-thing\/space"/);
   assert.match(home, /aria-label="Thing settings"/);
-  assert.doesNotMatch(home, /Change color|End this Thing|FIRST THOUGHT|your thing\./i);
+  assert.match(home, /FIRST THOUGHT/);
+  assert.doesNotMatch(home, /Change color|End this Thing|your thing\./i);
   assert.doesNotMatch(home, /type="radio"|share invite/);
+});
+test('redesigned lobby card prioritizes Charm, nickname, members and recent signal', () => {
+  const recent={id:'h',game_type:'same_brain',state:'complete',created_at:'2030-01-01T00:00:00Z',completed_at:'2030-01-01T01:00:00Z',result:{matches:6,rounds:8},souvenir_keys:[]};
+  const item={...joined,nickname:'Lucky Orbit',status:'active',charm_key:'clover',recent_hangouts:[recent]};
+  const html=render(ThingsScreen,{result:{ok:true,data:[item]}});
+  assert.match(html,/Lucky Orbit/); assert.match(html,/Test Creator \+ Test Partner/); assert.match(html,/alt="Clover"/); assert.match(html,/Same Brain · 6\/8/); assert.match(html,/href="\/thing\/test-thing"/);
 });
 test('canonical Thing CTA reflects incoming, waiting and active shared Hangouts', () => {
   const base = { ...joined, status: 'active', charm_key: 'moon', color_key: 'electric_blue' };

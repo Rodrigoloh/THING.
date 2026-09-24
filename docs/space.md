@@ -1,6 +1,8 @@
 # Space
 
-`/thing/[thingId]/space` is the persistent shared memory shelf. It is separate from the Hub and combines a compact streak/Hangout summary with Same Brain, Know Me, This or That and Hot highlights. `space_snapshot` remains member-authorized and derives stats only from completed Hangouts.
+The Thing page is the Space. `/thing/[thingId]` combines identity, the current Hangout, recent activity, souvenirs, moment previews, chat fragments and compact milestones in one growing shared surface. `/thing/[thingId]/space` redirects to it and is no longer a separate destination. `space_snapshot` remains member-authorized and derives stats only from completed Hangouts.
+
+Chat and Moments remain separate tools within that universe. Their previews are explicitly filtered by `thing_id`, bounded to three messages and four photos, and remain protected by their existing member-only RLS policies.
 
 Souvenirs are unique by `(thing_id, souvenir_key)`, retain their source Hangout and unlock time, and render as collectible keepsakes. Same Brain keeps `FIRST_THOUGHT`, `SAME_BRAIN`, `LOCKED_IN` and `PERFECT_SYNC`. Hot adds `HEAT_CHECK`, `TURNED_UP`, `AFTER_HOURS` and `KITKAT`.
 

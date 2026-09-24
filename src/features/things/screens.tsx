@@ -18,6 +18,9 @@ import { hangoutCopy } from '@/features/hangouts/copy';
 import { joinHangout } from '@/features/hangouts/actions';
 import { ThingTheme } from '@/components/thing/thing-theme';
 import type { SpaceSnapshot } from '@/features/space/model';
+import type { ChatMessage } from '@/features/chat/model';
+import type { Moment } from '@/features/moments/model';
+import { ChatFragments, Milestones, MomentsPreview, SouvenirShelf, StatStrip } from '@/features/space/screen';
 import { CharmIcon, thingDisplayName } from '@/components/thing/charm-icon';
 import { getSouvenir } from '@/lib/souvenirs';
 
@@ -71,19 +74,20 @@ export function ThingsScreen({ result }: { result: Result<ThingSnapshot[]> }) {
   if (!result.data.length) return <EmptyThings />;
   const current = result.data.filter((thing) => thing.status !== 'disconnected');
   const past = result.data.filter((thing) => thing.status === 'disconnected');
-  const cards = (things: ThingSnapshot[]) => <ul className="divide-y divide-border border-y border-border">{things.map((thing) => { const recent=thing.recent_hangouts[0]; const active=thing.active_hangout; return <li key={thing.id}>
-    <Link href={`/thing/${thing.id}`} className="grid grid-cols-[72px_1fr_auto] items-center gap-4 py-5">
-      <div className="rounded-full p-1" style={{ backgroundColor: `color-mix(in srgb, ${thingColors[thing.color_key]} 18%, transparent)` }}><CharmIcon charm={thing.charm_key} size={64} /></div>
-      <div className="min-w-0"><p className="truncate font-heading text-xl font-bold">{thingDisplayName(thing)}</p>{thing.nickname && <p className="truncate text-sm text-muted">{thing.members.map((member) => member.display_name).join(' + ')}</p>}<p className="mt-1 text-xs font-semibold text-muted">{active ? (!active.current_user_joined ? c.waitingForYou : active.other_user_joined ? c.inProgress : c.waiting) : recent ? `${hangoutCopy[locale][recent.game_type]} · ${recent.result?.matches ?? recent.result?.agreements ?? recent.result?.correct_predictions ?? recent.result?.prompts_completed ?? ''}` : c[thing.status]}</p></div>
-      <span aria-hidden="true" className="text-xl">→</span>
-    </Link>
+  const cards = (things: ThingSnapshot[]) => <ul className="space-y-3">{things.map((thing,index) => { const recent=thing.recent_hangouts[0]; const active=thing.active_hangout; const signal=active ? (!active.current_user_joined ? c.waitingForYou : active.other_user_joined ? `${hangoutCopy[locale][active.game_type]} · ${c.inProgress}` : c.waiting) : recent ? recent.game_type==='hot' ? `${hangoutCopy[locale].hot} · reached ${recent.result?.highest_level ?? 'warm'}` : `${hangoutCopy[locale][recent.game_type]} · ${recent.result?.matches ?? recent.result?.agreements ?? recent.result?.correct_predictions ?? recent.result?.prompts_completed ?? ''}${recent.result?.rounds ? `/${recent.result.rounds}` : ''}` : c[thing.status]; return <li key={thing.id}>
+    <ThingTheme color={thing.color_key}><Link href={`/thing/${thing.id}`} className="relative grid min-h-28 grid-cols-[76px_1fr_auto] items-center gap-4 overflow-hidden rounded-[26px] bg-surface px-4 py-4">
+      <span className="absolute inset-y-0 left-0 w-1.5 bg-[var(--thing-primary)]" aria-hidden="true" />
+      <span className="absolute right-10 top-1 font-heading text-4xl text-[var(--thing-primary-soft)]" aria-hidden="true">{index%2?'○':'✦'}</span>
+      <div className="relative grid h-[68px] w-[68px] place-items-center rounded-[45%_55%_50%_50%] bg-[var(--thing-primary-soft)]"><CharmIcon charm={thing.charm_key} size={58} /></div>
+      <div className="relative min-w-0"><p className="truncate font-heading text-xl font-black">{thingDisplayName(thing)}</p>{thing.nickname && <p className="truncate text-xs font-semibold text-muted">{thing.members.map((member) => member.display_name).join(' + ')}</p>}<p className="thing-accent-text mt-2 truncate text-xs font-bold uppercase tracking-[.08em]">{signal}</p></div>
+      <span aria-hidden="true" className="relative thing-accent-text text-2xl">↗</span>
+    </Link></ThingTheme>
   </li>; })}</ul>;
   return <Screen title={c.title}>
     <Sync enabled={result.data.some((thing) => thing.status.startsWith('pending_'))} />
     {cards(current)}
     <div className="grid grid-cols-2 gap-3"><ActionLink href="/things/new">+ {c.start.replace('→','')}</ActionLink><ActionLink href="/join" secondary>{c.join}</ActionLink></div>
     {!!past.length && <details><summary className="min-h-11 cursor-pointer text-sm font-semibold uppercase tracking-[.16em] text-muted">{c.pastThings} · {past.length}</summary>{cards(past)}</details>}
-    <Link href="/profile/settings" className="inline-flex min-h-11 items-center underline">{c === flowCopy.es ? 'tu cuenta' : 'your account'}</Link>
   </Screen>;
 }
 
@@ -91,9 +95,10 @@ function RecentActivity({ thing }: { thing: ThingSnapshot }) {
   const { locale } = useLocale();
   const c = useCopy();
   const h = hangoutCopy[locale];
-  return <section className="space-y-3">
-    <h2 className="text-sm font-semibold uppercase tracking-[.16em] text-muted">{c.recentActivity}</h2>
-    {thing.recent_hangouts.length ? <ul className="divide-y divide-border border-y border-border">{thing.recent_hangouts.map((item) => <li key={item.id} className="grid grid-cols-[1fr_auto] gap-4 py-5">
+  return <section className="space-y-5">
+    <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-muted">what you’ve been up to</p><h2 className="font-heading text-3xl font-black">{c.recentActivity}</h2></div>
+    {thing.recent_hangouts.length ? <ul className="space-y-3">{thing.recent_hangouts.map((item,index) => <li key={item.id} className="relative grid grid-cols-[1fr_auto] gap-4 py-2 pl-5">
+      <span className={`absolute left-0 top-3 h-2.5 w-2.5 rounded-full ${index===0?'bg-[var(--thing-primary)]':'border border-[var(--thing-accent-border)]'}`} aria-hidden="true" />
       <div><span className="font-heading text-sm font-bold tracking-wide">{h[item.game_type].toUpperCase()}</span>
         {item.result?.matches !== undefined && item.result.rounds !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.matches} / {item.result.rounds} {c.matchedShort}</p>}
         {item.result?.correct_predictions !== undefined && <p className="mt-1 text-lg font-semibold">{item.result.correct_predictions} / {item.result.rounds ?? 8} predictions</p>}
@@ -153,7 +158,7 @@ function ThingSettings({ thing, open, onClose }: { thing: ThingSnapshot; open: b
   </div>;
 }
 
-function ActiveThingHome({ thing, spaceResult }: { thing: ThingSnapshot; spaceResult?: Result<SpaceSnapshot> }) {
+function ActiveThingHome({ thing, spaceResult, chatPreview, momentsPreview }: { thing: ThingSnapshot; spaceResult?: Result<SpaceSnapshot>; chatPreview?: Result<ChatMessage[]>; momentsPreview?: Result<Moment[]> }) {
   const c = useCopy();
   const router = useRouter();
   const { locale } = useLocale();
@@ -163,6 +168,8 @@ function ActiveThingHome({ thing, spaceResult }: { thing: ThingSnapshot; spaceRe
   const [joinError, setJoinError] = useState<FlowError | null>(null);
   const active = thing.active_hangout;
   const space = spaceResult?.ok ? spaceResult.data : null;
+  const messages = chatPreview?.ok ? chatPreview.data : [];
+  const moments = momentsPreview?.ok ? momentsPreview.data : [];
   function join() {
     if (!active) return;
     transition(async () => {
@@ -170,17 +177,30 @@ function ActiveThingHome({ thing, spaceResult }: { thing: ThingSnapshot; spaceRe
       if (!result.ok) setJoinError(result.error); else router.push(`/thing/${thing.id}/hangout/${active.id}`);
     });
   }
-  return <ThingTheme color={thing.color_key} className="space-y-10 pb-8">
+  return <ThingTheme color={thing.color_key} className="space-y-12 pb-16">
     <Sync enabled={thing.status === 'active' && !!active} />
     <header className="flex items-center justify-between py-5"><Link href="/things" className="font-heading text-lg font-black tracking-tight">THING.</Link>{thing.status === 'active' && <button className="min-h-11 min-w-11 text-xl font-bold" aria-label={c.settings} onClick={() => setSettingsOpen(true)}>•••</button>}</header>
-    <section className="relative text-center"><span className="absolute left-[12%] top-8 rotate-[-12deg] text-3xl thing-accent-text" aria-hidden="true">✦</span><span className="absolute right-[10%] top-20 rotate-12 text-2xl thing-accent-text" aria-hidden="true">○</span><h1 className="font-heading break-words text-4xl font-black tracking-tight">{thingDisplayName(thing)}</h1>{thing.nickname&&<p className="mt-2 text-sm text-muted">{thing.members.map((member)=>member.display_name).join(' + ')}</p>}<CharmIcon charm={thing.charm_key} size={176} className="mx-auto mt-6" /></section>
-    {thing.status === 'active' ? <section className="mx-auto max-w-md space-y-3">
-      {!active ? <ActionLink href={`/thing/${thing.id}/hangout/new`} themed>{c.startHangout}</ActionLink> : <><p className="font-heading text-2xl font-bold">{h[active.game_type]}</p><p className="text-sm text-muted">{!active.current_user_joined ? c.waitingForYou : !active.other_user_joined ? c.waiting : c.inProgress}</p>{active.current_user_joined ? <ActionLink href={`/thing/${thing.id}/hangout/${active.id}`} themed>{active.other_user_joined ? c.continueHangout : c.openHangout}</ActionLink> : <button className="thing-primary-button min-h-14 w-full px-5 py-4 font-semibold disabled:opacity-50" disabled={joining} onClick={join}>{joining ? c.busy : c.joinHangout}</button>}</>}
-      <ErrorMessage error={joinError} />
-    </section> : <p className="border-y border-border py-5 font-semibold">{c.ended}</p>}
-    <nav aria-label="Thing areas" className="grid grid-cols-3 border-y border-border py-5 text-center font-heading font-bold"><Link className="min-h-12 content-center" href={`/thing/${thing.id}/chat`}>chat</Link><Link className="min-h-12 content-center" href={`/thing/${thing.id}/moments`}>moments</Link><Link className="min-h-12 content-center" href={`/thing/${thing.id}/space`}>space</Link></nav>
-    {space && <p className="text-center text-sm text-muted">{space.current_streak} {c.dayStreak} · {space.total_completed_hangouts} {c.hangoutsShort}</p>}
-    <RecentActivity thing={thing} />
+    <section className="relative text-center" aria-labelledby="space-title">
+      <span className="absolute left-[8%] top-20 rotate-[-12deg] text-4xl thing-accent-text" aria-hidden="true">✦</span><span className="absolute right-[7%] top-28 rotate-12 text-3xl thing-accent-text" aria-hidden="true">○</span><span className="absolute right-[18%] top-4 rotate-6 font-heading text-xs font-black uppercase tracking-[.2em] thing-accent-text" aria-hidden="true">ours</span>
+      <p className="text-[10px] font-bold uppercase tracking-[.24em] text-muted">your shared little universe</p><h1 id="space-title" className="mt-2 font-heading break-words text-4xl font-black tracking-tight">{thingDisplayName(thing)}</h1>{thing.nickname&&<p className="mt-2 text-sm font-semibold text-muted">{thing.members.map((member)=>member.display_name).join(' + ')}</p>}
+      <div className="relative mx-auto mt-6 grid h-48 w-48 place-items-center rounded-full bg-[var(--thing-primary-soft)]"><span className="absolute inset-3 rounded-full border border-dashed border-[var(--thing-accent-border)]" aria-hidden="true"/><CharmIcon charm={thing.charm_key} size={156} className="relative" /></div>
+    </section>
+    <div className="space-y-4">
+      {thing.status === 'active' ? <section className="mx-auto max-w-md space-y-3" aria-label="Current Hangout">
+        {active && <div className="flex items-center justify-between gap-3 px-1"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-muted">current hangout</p><p className="font-heading text-xl font-black">{h[active.game_type]}</p></div><span className="rounded-full bg-[var(--thing-primary-soft)] px-3 py-2 text-xs font-bold">{!active.current_user_joined ? c.waitingForYou : !active.other_user_joined ? c.waiting : c.inProgress}</span></div>}
+        {!active ? <ActionLink href={`/thing/${thing.id}/hangout/new`} themed>{c.startHangout}</ActionLink> : active.current_user_joined ? <ActionLink href={`/thing/${thing.id}/hangout/${active.id}`} themed>{active.other_user_joined ? c.continueHangout : c.openHangout}</ActionLink> : <button className="thing-primary-button min-h-14 w-full px-5 py-4 font-semibold disabled:opacity-50" disabled={joining} onClick={join}>{joining ? c.busy : c.joinHangout}</button>}
+        <ErrorMessage error={joinError} />
+      </section> : <p className="border-y border-border py-5 text-center font-semibold">{c.ended}</p>}
+      <nav aria-label="Thing tools" className="mx-auto grid max-w-md grid-cols-2 gap-3"><Link className="min-h-11 content-center rounded-full border border-[var(--thing-accent-border)] px-4 text-center font-heading text-sm font-bold" href={`/thing/${thing.id}/chat`}>chat <span aria-hidden="true">↗</span></Link><Link className="min-h-11 content-center rounded-full bg-[var(--thing-primary-soft)] px-4 text-center font-heading text-sm font-bold" href={`/thing/${thing.id}/moments`}>moments <span aria-hidden="true">↗</span></Link></nav>
+    </div>
+    {space && <StatStrip space={space} />}
+    <div className="space-y-16">
+      <RecentActivity thing={thing} />
+      {space && <SouvenirShelf space={space} />}
+      <MomentsPreview thingId={thing.id} moments={moments} />
+      <ChatFragments thing={thing} messages={messages} />
+      {space && <Milestones space={space} />}
+    </div>
     {thing.status === 'active' && <ThingSettings thing={thing} open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
   </ThingTheme>;
 }
@@ -345,11 +365,11 @@ function CharmPanel({ thing }: { thing: ThingSnapshot }) {
   </div>;
 }
 
-export function ThingScreen({ result, spaceResult }: { result: Result<ThingSnapshot>; spaceResult?: Result<SpaceSnapshot> }) {
+export function ThingScreen({ result, spaceResult, chatPreview, momentsPreview }: { result: Result<ThingSnapshot>; spaceResult?: Result<SpaceSnapshot>; chatPreview?: Result<ChatMessage[]>; momentsPreview?: Result<Moment[]> }) {
   const c = useCopy();
   if (!result.ok) return <LoadError error={result.error} />;
   const thing = result.data;
-  if (thing.status === 'active' || thing.status === 'disconnected') return <ActiveThingHome thing={thing} spaceResult={spaceResult} />;
+  if (thing.status === 'active' || thing.status === 'disconnected') return <ActiveThingHome thing={thing} spaceResult={spaceResult} chatPreview={chatPreview} momentsPreview={momentsPreview} />;
   return <><header className="flex items-center justify-between py-5"><Link href="/things" className="font-heading text-lg font-black tracking-tight">THING.</Link></header><Screen title={c[thing.status]} backHref="/things">
     <Sync enabled={thing.status.startsWith('pending_')} />
     {thing.status.startsWith('pending_') && <p className="break-words text-xl font-semibold">{thing.members.map((member) => member.display_name).join(' + ')}</p>}
