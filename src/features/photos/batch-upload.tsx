@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { uploadThingPhoto } from './actions';
+import { cancelThingPhotoUpload, completeThingPhotoUpload, prepareThingPhotoUpload } from './actions';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { uploadThingPhotoDirect } from './direct-upload';
 import {
   formatPhotoBytes,
   prepareThingPhotoBatch,
@@ -81,10 +83,21 @@ export function PhotoBatchUpload({ thingId }: { thingId: string }) {
       targets,
       async (photo) => {
         setItems((current) => current.map((item) => item.contentHash === photo.contentHash ? { ...item, status: 'uploading', error: undefined } : item));
-        const data = new FormData();
-        data.set('photo', photo.file);
-        data.set('contentHash', photo.contentHash);
-        return uploadThingPhoto(thingId, data);
+        const ticket=await prepareThingPhotoUpload(thingId,{
+          originalFilename:photo.file.name,
+          mimeType:photo.file.type,
+          fileSizeBytes:photo.file.size,
+          contentHash:photo.contentHash,
+          metadata:photo.metadata,
+        });
+        if (!ticket.ok) return ticket;
+        const storage=getSupabaseBrowserClient().storage.from('thing-moments');
+        const directResult=await uploadThingPhotoDirect(storage,ticket,photo.file);
+        if (!directResult.ok) {
+          await cancelThingPhotoUpload(thingId,ticket.photoId);
+          return directResult;
+        }
+        return {ok:true,photoId:ticket.photoId};
       },
       (completed, total) => setProgress({ completed, total }),
       (photo, result) => {
@@ -101,6 +114,7 @@ export function PhotoBatchUpload({ thingId }: { thingId: string }) {
     const errors = [...new Set(results.flatMap((result) => result.ok || result.error === 'duplicate' ? [] : [result.error]))];
     setOutcome({ uploaded: existingUploaded + uploaded, failed, duplicates: existingDuplicates + duplicates, errors });
     setUploading(false);
+    if (uploaded > 0) await completeThingPhotoUpload(thingId).catch(()=>undefined);
     router.refresh();
   }
 

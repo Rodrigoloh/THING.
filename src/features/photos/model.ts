@@ -1,13 +1,25 @@
+import { extractThingPhotoMetadata, type ThingPhotoMetadata } from './metadata';
+
 export const thingPhotoBucket = 'thing-moments';
 export const maxThingPhotoBytes = 20 * 1024 * 1024;
 export const maxThingPhotoBatch = 50;
 export const thingPhotoMimeTypes = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 export type ThingPhotoFileError = 'invalid_type' | 'too_large' | 'invalid_data' | 'too_many_files' | 'duplicate_selection';
-export type PreparedThingPhoto = { file: File; contentHash: string };
+export type PreparedThingPhoto = { file: File; contentHash: string; metadata: ThingPhotoMetadata };
 export type RejectedThingPhoto = { file: File; error: ThingPhotoFileError };
 export type ThingPhotoUploadError = 'duplicate' | 'invalid_file' | 'not_member' | 'setup_required' | 'storage_limit' | 'upload_failed' | 'connection_failed';
 export type ThingPhotoUploadResult = { ok: true; photoId: string } | { ok: false; error: ThingPhotoUploadError };
+export type ThingPhotoUploadRequest = {
+  originalFilename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  contentHash: string;
+  metadata: ThingPhotoMetadata;
+};
+export type ThingPhotoUploadTicket =
+  | { ok: true; photoId: string; storagePath: string; token: string }
+  | { ok: false; error: ThingPhotoUploadError };
 export type ThingPhotoDownloadResult = { ok: true; url: string; filename: string; expiresAt: string } | { ok: false; error: 'download_unavailable' };
 
 export type ThingPhoto = {
@@ -106,8 +118,11 @@ function hasThingPhotoSignature(bytes: Uint8Array, type: string): boolean {
   return false;
 }
 
-export async function hashThingPhoto(file: Blob): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+export async function hashThingPhoto(file: Blob | Uint8Array): Promise<string> {
+  const bytes=file instanceof Blob ? new Uint8Array(await file.arrayBuffer()) : file;
+  const stableBytes=new Uint8Array(bytes.byteLength);
+  stableBytes.set(bytes);
+  const digest = await crypto.subtle.digest('SHA-256', stableBytes.buffer);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
@@ -120,15 +135,35 @@ export async function prepareThingPhotoBatch(files: File[]): Promise<{ accepted:
     const initial = validateThingPhotoFile(file);
     if (initial) { rejected.push({ file, error: initial }); continue; }
     try {
-      const header = new Uint8Array(await file.slice(0,12).arrayBuffer());
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const header = bytes.subarray(0,12);
       if (!hasThingPhotoSignature(header,file.type)) { rejected.push({ file, error: 'invalid_data' }); continue; }
-      const contentHash = await hashThingPhoto(file);
+      const contentHash = await hashThingPhoto(bytes);
       if (hashes.has(contentHash)) { rejected.push({ file, error: 'duplicate_selection' }); continue; }
       hashes.add(contentHash);
-      accepted.push({ file, contentHash });
+      const metadata = await extractThingPhotoMetadata(bytes,file.type);
+      accepted.push({ file, contentHash, metadata });
     } catch { rejected.push({ file, error: 'invalid_data' }); }
   }
   return { accepted, rejected };
+}
+
+export function validateThingPhotoUploadRequest(request: ThingPhotoUploadRequest): boolean {
+  if (!request || typeof request !== 'object') return false;
+  if (!thingPhotoMimeTypes.includes(request.mimeType as (typeof thingPhotoMimeTypes)[number])) return false;
+  if (!Number.isSafeInteger(request.fileSizeBytes) || request.fileSizeBytes <= 0 || request.fileSizeBytes > maxThingPhotoBytes) return false;
+  if (!/^[0-9a-f]{64}$/.test(request.contentHash)) return false;
+  const filename=request.originalFilename.trim();
+  if (!filename || filename.length > 255 || /[\u0000-\u001f\u007f]/.test(filename)) return false;
+  const metadata=request.metadata;
+  if (!metadata || typeof metadata !== 'object') return false;
+  if (metadata.takenAt !== null && (typeof metadata.takenAt !== 'string' || !Number.isFinite(Date.parse(metadata.takenAt)))) return false;
+  if (metadata.latitude !== null && (typeof metadata.latitude !== 'number' || !Number.isFinite(metadata.latitude) || metadata.latitude < -90 || metadata.latitude > 90)) return false;
+  if (metadata.longitude !== null && (typeof metadata.longitude !== 'number' || !Number.isFinite(metadata.longitude) || metadata.longitude < -180 || metadata.longitude > 180)) return false;
+  if ((metadata.latitude === null) !== (metadata.longitude === null)) return false;
+  if (metadata.orientation !== null && (!Number.isInteger(metadata.orientation) || metadata.orientation < 1 || metadata.orientation > 8)) return false;
+  for (const dimension of [metadata.width,metadata.height]) if (dimension !== null && (!Number.isInteger(dimension) || dimension <= 0)) return false;
+  return typeof metadata.exifAvailable === 'boolean';
 }
 
 export async function uploadPreparedThingPhotos(

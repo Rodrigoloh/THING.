@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 
 const {
   maxThingPhotoBatch, maxThingPhotoBytes, prepareThingPhotoBatch,
-  uploadPreparedThingPhotos, validateThingPhotoFile,
+  uploadPreparedThingPhotos, validateThingPhotoFile, validateThingPhotoUploadRequest,
 } = await import('../src/features/photos/model.ts');
+const { uploadThingPhotoDirect } = await import('../src/features/photos/direct-upload.ts');
 
 function png(name, tail = 1) {
   return new File([Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,tail])],name,{type:'image/png'});
@@ -49,4 +50,40 @@ test('the same file selected twice is hashed once and skipped as a duplicate', a
   assert.equal(prepared.accepted.length,1);
   assert.equal(prepared.rejected.length,1);
   assert.equal(prepared.rejected[0].error,'duplicate_selection');
+});
+
+test('a photo larger than Vercel payload limits produces only a small upload request', async () => {
+  const padding=new Uint8Array(6*1024*1024);
+  const file=new File([Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,1]),padding],'large.png',{type:'image/png'});
+  const prepared=(await prepareThingPhotoBatch([file])).accepted[0];
+  assert.ok(prepared);
+  const request={originalFilename:file.name,mimeType:file.type,fileSizeBytes:file.size,contentHash:prepared.contentHash,metadata:prepared.metadata};
+  assert.equal(validateThingPhotoUploadRequest(request),true);
+  assert.ok(JSON.stringify(request).length<2048);
+});
+
+test('signed-upload metadata rejects invalid sizes, hashes and coordinates', () => {
+  const base={originalFilename:'photo.jpg',mimeType:'image/jpeg',fileSizeBytes:100,contentHash:'a'.repeat(64),metadata:{takenAt:null,latitude:null,longitude:null,orientation:null,width:100,height:100,exifAvailable:false}};
+  assert.equal(validateThingPhotoUploadRequest(base),true);
+  assert.equal(validateThingPhotoUploadRequest({...base,fileSizeBytes:maxThingPhotoBytes+1}),false);
+  assert.equal(validateThingPhotoUploadRequest({...base,contentHash:'not-a-hash'}),false);
+  assert.equal(validateThingPhotoUploadRequest({...base,metadata:{...base.metadata,latitude:91,longitude:10}}),false);
+});
+
+test('direct upload treats a stored photo as successful after a lost response', async () => {
+  const storage={
+    async uploadToSignedUrl(){throw new Error('connection interrupted')},
+    async exists(){return {data:true}},
+  };
+  const result=await uploadThingPhotoDirect(storage,{storagePath:'thing/photo/original.jpg',token:'signed-token'},new File(['photo'],'photo.jpg',{type:'image/jpeg'}));
+  assert.deepEqual(result,{ok:true});
+});
+
+test('direct upload reports a retryable connection failure when nothing was stored', async () => {
+  const storage={
+    async uploadToSignedUrl(){throw new Error('connection interrupted')},
+    async exists(){return {data:false}},
+  };
+  const result=await uploadThingPhotoDirect(storage,{storagePath:'thing/photo/original.jpg',token:'signed-token'},new File(['photo'],'photo.jpg',{type:'image/jpeg'}));
+  assert.deepEqual(result,{ok:false,error:'connection_failed'});
 });

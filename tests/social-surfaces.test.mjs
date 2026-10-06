@@ -8,7 +8,7 @@ import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared
 registerHooks({ resolve(specifier, context, next) {
   if (specifier === './actions' && context.parentURL?.includes('/features/chat/')) return { url: 'data:text/javascript,export async function sendMessage(){}', shortCircuit: true };
   if (specifier === './actions' && context.parentURL?.includes('/features/moments/')) return { url: 'data:text/javascript,export async function addMoment(){}', shortCircuit: true };
-  if (specifier === './actions' && context.parentURL?.includes('/features/photos/')) return { url: 'data:text/javascript,export async function uploadThingPhoto(){}', shortCircuit: true };
+  if (specifier === './actions' && context.parentURL?.includes('/features/photos/')) return { url: 'data:text/javascript,export async function prepareThingPhotoUpload(){};export async function cancelThingPhotoUpload(){};export async function completeThingPhotoUpload(){}', shortCircuit: true };
   if (specifier === './download-actions' && context.parentURL?.includes('/features/photos/')) return { url: 'data:text/javascript,export async function createThingPhotoDownload(){return {ok:false,error:"download_unavailable"}}', shortCircuit: true };
   return next(specifier, context);
 } });
