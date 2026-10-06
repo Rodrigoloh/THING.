@@ -19,6 +19,9 @@ Apply migrations in order, once each, using the Supabase SQL Editor or your usua
 9. `20260923000900_refine_hot_and_know_me.sql` — production prompt metadata, refined Hot interactions and Know Me explanations.
 10. `20260923001000_thing_social_hub.sql` — nickname, expanded Charms/souvenirs, Chat, Moments and private Storage policies.
 11. `20260923001100_cycle_kitkat_progress.sql` — repeatable Thing-level KitKat progress, historical backfill and cycle-aware Hot/Space RPCs. Apply this after an already-installed 010; do not rerun 010.
+12. `20261005001200_thing_photos_foundation.sql` — Thing-level Gallery metadata, per-Thing duplicate detection and member-scoped table/Storage policies. Existing Moments remain unchanged.
+13. `20261005001300_increase_thing_photo_limit.sql` — raises the existing private Thing photo bucket limit to 20 MiB for per-file batch uploads.
+14. `20261005001400_add_photo_orientation.sql` — adds nullable EXIF orientation with the standard 1–8 value constraint.
 
 Migration 004 preserves active/disconnected Things and legacy choice history. For a pending Charm Thing with an unresolved legacy choice, it promotes one current-round choice into the initial proposal. Existing invite codes remain valid; only newly generated and renewed codes use the short alphabet.
 
@@ -74,7 +77,7 @@ Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. `node scri
 
 ## Hosted acceptance (two browser sessions)
 
-1. Apply every missing migration through 011, configure password email redirects/templates, then deploy the code. If 010 is already present, apply 011 without rerunning 010.
+1. Apply every missing migration through 014, configure password email redirects/templates, then deploy the code. Never rerun an earlier migration that is already installed.
 2. Create and confirm a new password account, create its profile, sign out, and sign in again. Wrong credentials must show safe copy. Verify the OTP fallback separately.
 3. For an account originally created through OTP, set a password in Account settings. Sign in with it and confirm the same Auth ID, profile, avatar, Things and memberships remain.
 4. Request password recovery. The email must return through `/auth/callback` to `/auth/update-password`; after changing it, the same account data must remain.

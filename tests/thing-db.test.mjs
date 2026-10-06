@@ -621,6 +621,79 @@ test('Thing database: migrations, RPCs, RLS and concurrent transactions', { time
       await assert.rejects(joined.outsider.client.query("insert into storage.objects(bucket_id,name) values('thing-moments',$1)", [`${joined.id}/${joined.outsider.id}/${randomUUID()}.jpg`]), /row-level security/);
     });
 
+    await t.test('Thing photos enforce shared reads, uploader ownership and per-Thing deduplication', async () => {
+      assert.equal(Number((await admin.query("select file_size_limit from storage.buckets where id='thing-moments'")).rows[0].file_size_limit), 20 * 1024 * 1024);
+      // Deliberately equal to the other member's Auth ID. Legacy Moment
+      // policies must not mistake the new photo-id segment for an author ID.
+      const photoId = joined.partner.id;
+      const photoPath = `${joined.id}/${photoId}/original.jpg`;
+      const contentHash = `sha256-${randomUUID()}`;
+      const inserted = (await a.client.query(`insert into public.thing_photos(
+        id,thing_id,storage_path,original_filename,mime_type,width,height,file_size_bytes,
+        content_hash,taken_at,latitude,longitude,orientation,exif_available
+      ) values($1,$2,$3,'first photo.jpg','image/jpeg',1200,900,2048,$4,'2020-01-02T03:04:05Z',19.4326,-99.1332,6,true)
+      returning *`, [photoId, joined.id, photoPath, contentHash])).rows[0];
+      assert.equal(inserted.uploaded_by, a.id);
+      assert.equal(inserted.thing_id, joined.id);
+      assert.equal(inserted.storage_path, photoPath);
+      assert.equal(inserted.exif_available, true);
+      assert.equal(inserted.orientation, 6);
+      assert.equal(new Date(inserted.taken_at).toISOString(),'2020-01-02T03:04:05.000Z');
+      assert.notEqual(new Date(inserted.taken_at).toISOString(),new Date(inserted.uploaded_at).toISOString());
+
+      await a.client.query("insert into storage.objects(bucket_id,name) values('thing-moments',$1)", [photoPath]);
+      const partnerPhoto = (await joined.partner.client.query('select * from public.thing_photos where id=$1', [photoId])).rows[0];
+      assert.equal(partnerPhoto.uploaded_by, a.id);
+      const uploaderGallery=(await a.client.query('select id from public.thing_photos where thing_id=$1 order by id',[joined.id])).rows.map((row)=>row.id);
+      const partnerGallery=(await joined.partner.client.query('select id from public.thing_photos where thing_id=$1 order by id',[joined.id])).rows.map((row)=>row.id);
+      assert.deepEqual(partnerGallery,uploaderGallery);
+      assert.equal((await joined.partner.client.query("select * from storage.objects where bucket_id='thing-moments' and name=$1", [photoPath])).rowCount, 1);
+
+      assert.equal((await joined.outsider.client.query('select * from public.thing_photos where id=$1', [photoId])).rowCount, 0);
+      assert.equal((await joined.outsider.client.query('select taken_at,latitude,longitude,orientation from public.thing_photos where id=$1', [photoId])).rowCount, 0);
+      assert.equal((await joined.outsider.client.query("select * from storage.objects where bucket_id='thing-moments' and name=$1", [photoPath])).rowCount, 0);
+      const outsiderPhotoId = randomUUID();
+      await assert.rejects(joined.outsider.client.query(
+        'insert into public.thing_photos(id,thing_id,storage_path,mime_type) values($1,$2,$3,$4)',
+        [outsiderPhotoId, joined.id, `${joined.id}/${outsiderPhotoId}/original.jpg`, 'image/jpeg']
+      ), /row-level security/);
+      await assert.rejects(joined.outsider.client.query(
+        "insert into storage.objects(bucket_id,name) values('thing-moments',$1)",
+        [`${joined.id}/${outsiderPhotoId}/original.jpg`]
+      ), /row-level security/);
+
+      const spoofedId = randomUUID();
+      await assert.rejects(joined.partner.client.query(
+        'insert into public.thing_photos(id,thing_id,uploaded_by,storage_path,mime_type) values($1,$2,$3,$4,$5)',
+        [spoofedId, joined.id, a.id, `${joined.id}/${spoofedId}/original.jpg`, 'image/jpeg']
+      ), /row-level security/);
+
+      const duplicateId = randomUUID();
+      await assert.rejects(a.client.query(
+        'insert into public.thing_photos(id,thing_id,storage_path,mime_type,content_hash) values($1,$2,$3,$4,$5)',
+        [duplicateId, joined.id, `${joined.id}/${duplicateId}/original.jpg`, 'image/jpeg', contentHash]
+      ), /thing_photos_thing_content_hash_unique|duplicate key/);
+
+      const another = await draft();
+      await inviteRpc(joined.partner, 'accept_thing_invite_v2', [another.code]);
+      await rpc(a, 'propose_thing_charm', [another.id, 0, 'moon']);
+      await rpc(joined.partner, 'accept_thing_charm', [another.id, 1]);
+      const otherPhotoId = randomUUID();
+      await a.client.query(
+        'insert into public.thing_photos(id,thing_id,storage_path,mime_type,content_hash) values($1,$2,$3,$4,$5)',
+        [otherPhotoId, another.id, `${another.id}/${otherPhotoId}/original.jpg`, 'image/jpeg', contentHash]
+      );
+      assert.equal((await admin.query('select count(*)::int n from public.thing_photos where content_hash=$1', [contentHash])).rows[0].n, 2);
+      const storedThings=(await admin.query('select thing_id from public.thing_photos where content_hash=$1 order by thing_id', [contentHash])).rows.map((row)=>row.thing_id);
+      assert.deepEqual(storedThings.sort(),[joined.id,another.id].sort());
+      await admin.query('delete from public.things where id=$1', [another.id]);
+
+      assert.equal((await joined.partner.client.query('delete from public.thing_photos where id=$1', [photoId])).rowCount, 0);
+      assert.equal((await joined.partner.client.query("delete from storage.objects where bucket_id='thing-moments' and name=$1", [photoPath])).rowCount, 0);
+      assert.equal((await a.client.query("delete from storage.objects where bucket_id='thing-moments' and name=$1", [photoPath])).rowCount, 1);
+      assert.equal((await a.client.query('delete from public.thing_photos where id=$1', [photoId])).rowCount, 1);
+    });
+
     await t.test('ending is member-only, idempotent, preserves history and blocks new Hangouts', async () => {
       await assert.rejects(rpc(joined.outsider, 'end_thing', [joined.id]), /thing_unavailable/);
       await rpc(joined.partner, 'end_thing', [joined.id]);

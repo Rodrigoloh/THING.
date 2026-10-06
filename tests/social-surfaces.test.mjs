@@ -8,6 +8,8 @@ import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared
 registerHooks({ resolve(specifier, context, next) {
   if (specifier === './actions' && context.parentURL?.includes('/features/chat/')) return { url: 'data:text/javascript,export async function sendMessage(){}', shortCircuit: true };
   if (specifier === './actions' && context.parentURL?.includes('/features/moments/')) return { url: 'data:text/javascript,export async function addMoment(){}', shortCircuit: true };
+  if (specifier === './actions' && context.parentURL?.includes('/features/photos/')) return { url: 'data:text/javascript,export async function uploadThingPhoto(){}', shortCircuit: true };
+  if (specifier === './download-actions' && context.parentURL?.includes('/features/photos/')) return { url: 'data:text/javascript,export async function createThingPhotoDownload(){return {ok:false,error:"download_unavailable"}}', shortCircuit: true };
   return next(specifier, context);
 } });
 
@@ -15,6 +17,7 @@ const { normalizeMessage } = await import('../src/features/chat/model.ts');
 const { validateMomentFile } = await import('../src/features/moments/model.ts');
 const { ChatScreen } = await import('../src/features/chat/screen.tsx');
 const { MomentsScreen } = await import('../src/features/moments/screen.tsx');
+const { PhotoViewer } = await import('../src/features/photos/viewer.tsx');
 const { SouvenirShelf, StatStrip } = await import('../src/features/space/screen.tsx');
 const { getSouvenir, souvenirRegistry } = await import('../src/lib/souvenirs.ts');
 const { recentThingItems } = await import('../src/features/space/preview.ts');
@@ -33,8 +36,19 @@ test('Moment validation checks MIME, size and signatures', async () => {
   assert.equal(await validateMomentFile(new File([Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,0])],'x.png',{type:'image/png'})),null);
   assert.equal(await validateMomentFile(new File([Uint8Array.from([1,2,3])],'x.png',{type:'image/png'})),'invalid_data');
   assert.equal(await validateMomentFile(new File([Uint8Array.from([1])],'x.gif',{type:'image/gif'})),'invalid_type');
-  const html=render(MomentsScreen,{thing,moments:{ok:true,data:[{id:'one',thing_id:thing.id,author_id:'a',storage_path:'p',caption:'that afternoon',created_at:'2030-01-01T00:00:00Z',image_url:'https://example.test/signed'}]}});
-  assert.match(html,/shared camera roll/); assert.match(html,/that afternoon/); assert.match(html,/type="file"/);
+  const html=render(MomentsScreen,{thing,moments:{ok:true,data:[{id:'one',thing_id:thing.id,author_id:'a',storage_path:'p',caption:'that afternoon',created_at:'2030-01-01T00:00:00Z',image_url:'https://example.test/signed'}]},gallery:{ok:true,data:[]}});
+  assert.match(html,/shared photos/); assert.match(html,/that afternoon/); assert.match(html,/type="file"/);
+  const galleryHtml=render(MomentsScreen,{thing,moments:{ok:true,data:[]},gallery:{ok:true,data:[]},initialView:'gallery'});
+  assert.match(galleryHtml,/nothing here yet/);
+  assert.match(galleryHtml,/<input[^>]*accept="image\/jpeg,image\/png,image\/webp"[^>]*multiple=""/);
+});
+
+test('Gallery opens a private original viewer with metadata, navigation and actions',()=>{
+  const galleryPhoto={id:'photo-1',thing_id:thing.id,uploaded_by:'a',storage_path:'thing-1/photo-1/original.jpg',original_filename:'night.jpg',mime_type:'image/jpeg',width:1600,height:1200,file_size_bytes:5000,content_hash:'hash',uploaded_at:'2026-10-05T10:00:00Z',taken_at:'2026-09-14T20:42:00Z',orientation:1,exif_available:true,created_at:'2026-10-05T10:00:00Z',image_url:'https://private.test/signed?token=one',location_saved:true};
+  const html=render(PhotoViewer,{photos:[galleryPhoto],photoId:galleryPhoto.id,uploaderNames:{a:'Mariana'},onClose(){}});
+  assert.match(html,/Photo viewer/); assert.match(html,/Mariana/); assert.match(html,/Sep 14, 2026 · 8:42 PM/); assert.match(html,/location saved/);
+  assert.match(html,/Previous photo/); assert.match(html,/Next photo/); assert.match(html,/download original/); assert.match(html,/make a moment/);
+  assert.match(html,/https:\/\/private\.test\/signed\?token=one/); assert.match(html,/object-contain/);
 });
 
 test('Space renders shared stats, Same Brain and Hot souvenirs as keepsakes', () => {

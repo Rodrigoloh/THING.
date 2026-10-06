@@ -6,6 +6,18 @@ import type { ThingSnapshot } from '@/features/things/model';
 import { getSouvenir } from '@/lib/souvenirs';
 import type { SpaceSnapshot } from './model';
 
+export function kitkatWasDiscovered(space:SpaceSnapshot): boolean {
+  return space.souvenirs.some((souvenir)=>souvenir.key==='KITKAT');
+}
+
+export function visibleHotMilestone(space:SpaceSnapshot): string {
+  if(kitkatWasDiscovered(space)) return 'KitKat found';
+  const level=space.hot.highest_level==='kitkat'?'spicy':space.hot.highest_level;
+  if(!level) return 'Hot is still a mystery';
+  const labels={flirty:'Flirty',bold:'Bold',spicy:'Spicy'} as const;
+  return `Hot reached ${labels[level]}`;
+}
+
 export function StatStrip({ space }: { space: SpaceSnapshot }) {
   const sameBrain = Math.round(space.same_brain.lifetime_match_rate * 100);
   return <section aria-label="Shared stats" className="grid grid-cols-3 border-y border-[var(--thing-accent-border)] py-4 text-center">
@@ -54,8 +66,7 @@ export function Milestones({ space }: { space: SpaceSnapshot }) {
     `${space.same_brain.matches} Same Brain matches`,
     `${space.know_me.correct}/${space.know_me.predictions} Know Me`,
     `${space.this_or_that.agreements} shared picks`,
-    space.hot.highest_level ? `Hot reached ${space.hot.highest_level}` : 'Hot is still a mystery',
-    space.hot.highest_level === 'kitkat' ? 'KitKat found' : `${space.hot.kitkat_progress}/3 toward KitKat`,
+    visibleHotMilestone(space),
   ];
   return <section className="space-y-4" aria-labelledby="milestones-title"><div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-muted">the ongoing bit</p><h2 id="milestones-title" className="font-heading text-3xl font-black">made together</h2></div><div className="flex flex-wrap gap-2">{items.map((item,index)=><span key={item} className={`rounded-full px-3 py-2 text-xs font-semibold ${index%2?'border border-[var(--thing-accent-border)]':'bg-[var(--thing-primary-soft)]'}`}>{item}</span>)}</div></section>;
 }
@@ -68,7 +79,7 @@ export function SpaceCollage({ thing, space, messages, moments, activity }: { th
     [space.total_completed_hangouts,'hangouts'],
     [`${sameBrain}%`,'same brain'],
   ] : [];
-  const milestone=space ? (space.hot.highest_level==='kitkat' ? 'KitKat found' : `${space.hot.kitkat_progress}/3 toward KitKat`) : null;
+  const milestone=space ? visibleHotMilestone(space) : null;
   const souvenirPlacements=['col-span-2 md:col-span-3 md:col-start-2','col-span-2 md:col-span-3 md:col-start-8','col-span-2 md:col-span-2 md:col-start-6'];
   const photoPlacements=['col-span-3 row-span-3 md:col-span-5 md:col-start-7','col-span-2 row-span-2 md:col-span-3 md:col-start-2','col-span-2 md:col-span-3 md:col-start-9','col-span-3 md:col-span-4 md:col-start-5'];
   return <section aria-labelledby="space-collage-title" className="space-y-7">

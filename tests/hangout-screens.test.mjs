@@ -91,4 +91,10 @@ test('Hot renders private escalation and universal Skip controls', () => {
   assert.match(round, /skip/); assert.match(round, /Flirty/);
   const gate = render(HangoutDetailScreen, { result: { ok: true, data: hangout }, hotResult: { ok: true, data: { ...hot, gate: { target_level: 'bold', own_vote: null, votes_cast: 0 } } } });
   assert.match(gate, /wanna turn it up/i); assert.match(gate, /stay flirty/); assert.match(gate, /go bold/); assert.doesNotMatch(gate, /Alex.*declined|Sam.*declined/i);
+  const hiddenGate = render(HangoutDetailScreen, { result: { ok: true, data: hangout }, hotResult: { ok: true, data: { ...hot, current_level:'spicy', kitkat_progress:3, kitkat_unlocked:true, gate: { target_level: 'kitkat', own_vote: null, votes_cast: 0 } } } });
+  assert.match(hiddenGate,/wait…/); assert.match(hiddenGate,/there’s something else/); assert.match(hiddenGate,/open it/); assert.match(hiddenGate,/not now/);
+  assert.doesNotMatch(hiddenGate,/kitkat|🍫|3\s*\/\s*3/i);
+  const discoveredRound={...hot.round,state:'revealed',level:'kitkat',prompt_en:'A discovered prompt',prompt_es:'Una pregunta descubierta',subject_name:'Alex',reactor_name:'Sam',role:'subject',needs_reaction:false,can_react:false,reaction_type:'respond',answers:[{answer_key:'a',is_subject:true}],callback:null};
+  const revealed = render(HangoutDetailScreen, { result: { ok: true, data: hangout }, hotResult: { ok: true, data: { ...hot, current_level:'kitkat', notice:'level_up', kitkat_first_discovery:true, gate:null, round:discoveredRound } } });
+  assert.match(revealed,/KITKAT/); assert.match(revealed,/you found it/); assert.match(revealed,/🍫/);
 });

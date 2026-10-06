@@ -12,6 +12,7 @@ export type Profile = {
 import type { ThingSnapshot, InvitePreview, InviteRpcResult, ThingColor } from '@/features/things/model';
 import type { ChoiceSnapshot, CreateHangoutResult, GameType, HangoutSnapshot, HotContext, HotLevel, HotMode, HotSetup, HotSnapshot, KnowMeResult, SameBrainSnapshot, SameBrainResult, ThisOrThatResult } from '@/features/hangouts/model';
 import type { SpaceSnapshot } from '@/features/space/model';
+import type { ThingPhoto } from '@/features/photos/model';
 export type ThingStatus = "pending_invite" | "pending_charm" | "active" | "disconnected";
 export type ThingMemberRole = "creator" | "member";
 export type ThingMemberStatus = "pending" | "active" | "left";
@@ -161,6 +162,12 @@ export type Database = {
       moments: {
         Row: { id: string; thing_id: string; author_id: string; storage_path: string; caption: string | null; created_at: string };
         Insert: { id?: string; thing_id: string; author_id?: string; storage_path: string; caption?: string | null; created_at?: string };
+        Update: { [_ in never]: never };
+        Relationships: [];
+      };
+      thing_photos: {
+        Row: ThingPhoto;
+        Insert: { id?: string; thing_id: string; uploaded_by?: string; storage_path: string; original_filename?: string | null; mime_type: string; width?: number | null; height?: number | null; file_size_bytes?: number | null; content_hash?: string | null; uploaded_at?: string; taken_at?: string | null; latitude?: number | null; longitude?: number | null; orientation?: number | null; exif_available?: boolean; created_at?: string };
         Update: { [_ in never]: never };
         Relationships: [];
       };
