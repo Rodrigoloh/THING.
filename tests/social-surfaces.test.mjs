@@ -17,6 +17,7 @@ const { normalizeMessage } = await import('../src/features/chat/model.ts');
 const { validateMomentFile } = await import('../src/features/moments/model.ts');
 const { ChatScreen } = await import('../src/features/chat/screen.tsx');
 const { MomentsScreen } = await import('../src/features/moments/screen.tsx');
+const { MomentViewer } = await import('../src/features/moments/viewer.tsx');
 const { PhotoViewer } = await import('../src/features/photos/viewer.tsx');
 const { SouvenirShelf, StatStrip } = await import('../src/features/space/screen.tsx');
 const { getSouvenir, souvenirRegistry } = await import('../src/lib/souvenirs.ts');
@@ -38,12 +39,20 @@ test('Moment validation checks MIME, size and signatures', async () => {
   assert.equal(await validateMomentFile(new File([Uint8Array.from([1])],'x.gif',{type:'image/gif'})),'invalid_type');
   const html=render(MomentsScreen,{thing,moments:{ok:true,data:[{id:'one',thing_id:thing.id,author_id:'a',storage_path:'p',caption:'that afternoon',created_at:'2030-01-01T00:00:00Z',image_url:'https://example.test/signed'}]},gallery:{ok:true,data:[]}});
   assert.match(html,/shared photos/); assert.match(html,/that afternoon/); assert.match(html,/type="file"/);
+  assert.match(html,/add a photo/); assert.match(html,/Open moment: that afternoon/);
   const galleryHtml=render(MomentsScreen,{thing,moments:{ok:true,data:[]},gallery:{ok:true,data:[]},initialView:'gallery'});
   assert.match(galleryHtml,/nothing here yet/);
   assert.match(galleryHtml,/<input[^>]*accept="image\/jpeg,image\/png,image\/webp"[^>]*multiple=""/);
   assert.match(galleryHtml,/select photos/);
   assert.match(galleryHtml,/up to 50 photos.*20 MB each/);
   assert.match(galleryHtml,/thing-primary-button/);
+});
+
+test('Moment viewer keeps the instant-photo crop, tag, caption and date',()=>{
+  const moment={id:'one',thing_id:thing.id,author_id:'a',storage_path:'p',caption:'that afternoon',created_at:'2030-01-01T00:00:00Z',image_url:'https://example.test/signed'};
+  const html=render(MomentViewer,{moment,onClose(){}});
+  assert.match(html,/role="dialog"/); assert.match(html,/Moment photo/); assert.match(html,/aspect-square/); assert.match(html,/object-cover/);
+  assert.match(html,/>moment</); assert.match(html,/that afternoon/); assert.match(html,/Jan 1, 2030/); assert.match(html,/Close moment/);
 });
 
 test('Gallery opens a private original viewer with metadata, navigation and actions',()=>{
