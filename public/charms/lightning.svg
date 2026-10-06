@@ -1,1 +1,5 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="365 510 140 140"><image href="thing-charms.svg" width="716" height="716"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="325" height="488" viewBox="0 0 325 488" fill="none">
+  <path fill="#d2f606" fill-rule="evenodd" d="M 287 31 L 154 89 L 18 311 L 108 289 L 127 302 L 53 472 L 310 209 L 206 228 L 187 215 Z"/>
+  <path fill="#a0b904" fill-rule="evenodd" d="M 289 29 L 154 87 L 18 309 L 69 300 L 19 310 L 153 89 L 286 31 L 188 215 L 206 227 L 310 210 L 55 469 L 126 307 L 113 290 L 71 299 L 113 290 L 126 307 L 51 475 L 313 207 L 206 227 L 188 215 Z"/>
+  <path fill="#5e6e02" fill-rule="evenodd" d="M 316 204 L 212 224 L 313 206 L 48 479 Z M 106 292 L 18 313 L 17 309 L 21 303 L 15 314 Z"/>
+</svg>
