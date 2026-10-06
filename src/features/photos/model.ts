@@ -25,6 +25,7 @@ export type ThingPhoto = {
   taken_at: string | null;
   latitude: number | null;
   longitude: number | null;
+  location_city: string | null;
   orientation: number | null;
   exif_available: boolean;
   created_at: string;
@@ -32,7 +33,7 @@ export type ThingPhoto = {
 
 export type ThingGalleryPhoto = Omit<ThingPhoto,'latitude'|'longitude'> & { image_url: string; location_saved: boolean };
 export type ThingGalleryGroup = { key: string; label: string; photos: ThingGalleryPhoto[] };
-export type ThingPhotoViewerMetadata = { uploader: string; date: string; dateKind: 'taken'|'uploaded'; locationSaved: boolean };
+export type ThingPhotoViewerMetadata = { uploader: string; date: string; dateKind: 'taken'|'uploaded'; locationSaved: boolean; locationCity: string | null };
 
 export function thingPhotoDisplayDate(photo: Pick<ThingPhoto, 'taken_at' | 'uploaded_at'>): string {
   return photo.taken_at ?? photo.uploaded_at;
@@ -79,7 +80,16 @@ export function thingPhotoViewerMetadata(photo:ThingGalleryPhoto,uploader:string
   const date=new Date(value);
   const day=new Intl.DateTimeFormat(locale,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(date);
   const time=new Intl.DateTimeFormat(locale,{hour:'numeric',minute:'2-digit',timeZone:'UTC'}).format(date);
-  return {uploader,date:photo.taken_at?`${day} · ${time}`:`uploaded ${day}`,dateKind:photo.taken_at?'taken':'uploaded',locationSaved:photo.location_saved};
+  return {uploader,date:photo.taken_at?`${day} · ${time}`:`uploaded ${day}`,dateKind:photo.taken_at?'taken':'uploaded',locationSaved:photo.location_saved,locationCity:photo.location_city??null};
+}
+
+export function galleryPhotoTag(photo:ThingGalleryPhoto,uploader:string,locale='es-MX'): string {
+  const date=new Date(thingPhotoDisplayDate(photo));
+  const day=new Intl.DateTimeFormat(locale,{day:'numeric',timeZone:'UTC'}).format(date);
+  const month=new Intl.DateTimeFormat(locale,{month:'long',timeZone:'UTC'}).format(date);
+  const year=new Intl.DateTimeFormat(locale,{year:'numeric',timeZone:'UTC'}).format(date);
+  const time=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'UTC'}).format(date);
+  return [uploader,`${day} ${month} ${year}, ${time}`,photo.location_city].filter(Boolean).join(' · ');
 }
 
 export function validateThingPhotoFile(file: Pick<File, 'size' | 'type'>): ThingPhotoFileError | null {

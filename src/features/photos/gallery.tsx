@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { groupThingGalleryPhotos, toggleGallerySelection, type ThingGalleryPhoto } from './model';
+import { galleryPhotoTag, groupThingGalleryPhotos, toggleGallerySelection, type ThingGalleryPhoto } from './model';
 import { PhotoViewer } from './viewer';
 
 export function ThingGallery({ photos, members, onSelectionChange, onMakeMoment }: { photos: ThingGalleryPhoto[]; members:{user_id:string;display_name:string}[]; onSelectionChange?: (photoIds: string[])=>void; onMakeMoment?:(photo:ThingGalleryPhoto)=>void }) {
@@ -27,9 +27,11 @@ export function ThingGallery({ photos, members, onSelectionChange, onMakeMoment 
         {/* Original signed objects are temporary until a thumbnail pipeline exists. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={photo.image_url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        {!selecting&&<span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1.5 pt-6 text-[8px] font-bold leading-tight text-white sm:text-[9px]">{galleryPhotoTag(photo,uploaderNames[photo.uploaded_by]??'Thing member')}</span>}
         {selecting&&<span aria-hidden="true" className={`absolute right-2 top-2 grid size-6 place-items-center rounded-full border-2 border-white text-xs font-black shadow ${active?'bg-black text-white':'bg-black/25 text-transparent'}`}>✓</span>}
       </button>;
     })}</div></section>)}
+    {photos.some((photo)=>photo.location_city)&&<p className="text-[10px] text-muted">City labels © OpenStreetMap contributors</p>}
     {viewingId&&<PhotoViewer photos={photos} photoId={viewingId} uploaderNames={uploaderNames} onClose={()=>setViewingId(null)} onMakeMoment={onMakeMoment}/>}
   </section>;
 }

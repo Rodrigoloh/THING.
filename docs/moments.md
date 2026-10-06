@@ -16,7 +16,7 @@ The current batch control lives on the Moments route without redesigning the Gal
 
 JPEG uploads also attempt server-side EXIF extraction with `exifr`. When present and valid, `DateTimeOriginal`, GPS latitude/longitude and orientation are stored alongside dimensions read from the image. PNG and WebP retain dimensions without inventing EXIF. Missing or malformed metadata leaves `taken_at`, coordinates and orientation null and `exif_available = false`; parsing errors never fail the photo upload. `taken_at` is the capture time and remains independent from the database-generated `uploaded_at`.
 
-EXIF and raw coordinates inherit `thing_photos` member-only RLS. They are not copied into activity, public discovery or unauthenticated responses, and this task performs no reverse geocoding.
+EXIF and raw coordinates inherit `thing_photos` member-only RLS. They are not copied into activity, public discovery or unauthenticated responses. Migration 015 adds a private cached `location_city` label. New uploads with GPS resolve that label server-side using coordinates rounded to two decimals; reverse-geocoding failure never blocks the upload. The browser receives the city label and a location-presence boolean, never the raw coordinates. City labels use OpenStreetMap/Nominatim with the required attribution and conservative one-request-per-second scheduling.
 
 ## Shared Gallery
 
@@ -27,6 +27,10 @@ Selection mode keeps a set of stable photo IDs and exposes a selection-change ho
 Gallery images currently use one-hour signed URLs for the original private objects with browser lazy loading. This preserves access control but can download a 10–20 MiB original when a cell enters the viewport. A later thumbnail pipeline should create small derivatives and store or resolve their private paths; the grid can then switch URLs without changing the `thing_photos` source model.
 
 Tapping a grid image outside selection mode opens a mobile-first fullscreen viewer. It preserves Gallery order, supports onscreen previous/next controls, horizontal swipe, desktop arrow keys and Escape/close. The main image uses the same signed private original with `object-contain`, so portrait and landscape files are not cropped. Metadata prefers `taken_at`; otherwise it identifies the displayed date as the upload date. Uploader IDs resolve against the authorized Thing member snapshot. The server converts an available GPS pair into a neutral `location saved` boolean and does not send raw coordinates to the viewer.
+
+Each Gallery cell carries a compact metadata tag built from the Thing member display name, effective photo timestamp and cached city when available. The viewer shows the same city label and falls back to the neutral `location saved` indicator when GPS exists but city resolution did not succeed.
+
+After applying migration 015, `npm run photos:backfill-cities` resolves and persists city labels for existing photos that already contain GPS metadata. The trusted one-time script requires the server-only service-role key and never sends that key or raw coordinates to the browser.
 
 The viewer exposes an original download and an `onMakeMoment` hook. Download does not reuse the display URL: every request revalidates the Supabase user, their active Thing membership and the photo's matching `thing_id`, then signs the exact `storage_path` for two minutes with a download disposition. Safe original filenames are preserved; unsafe characters are replaced and a missing name becomes `thing-photo-{photoId}.{ext}`. Browser navigation to that private URL uses the device's normal download handling on Android, iOS and desktop. Any authorization or Storage failure returns only the generic retry message. Until Gallery photos can be linked into curated Moments, the default make-a-Moment action displays a deferred-state message rather than copying or rewriting photo data.
 

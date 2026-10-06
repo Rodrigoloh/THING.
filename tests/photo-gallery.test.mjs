@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 const { galleryViewerIndex, groupThingGalleryPhotos, orderThingGalleryPhotos, selectThingGalleryPhotos, thingPhotoDisplayDate, thingPhotoViewerMetadata, toggleGallerySelection }=await import('../src/features/photos/model.ts');
 
 function photo(id,thingId,takenAt,uploadedAt) {
-  return {id,thing_id:thingId,uploaded_by:'member-a',storage_path:`${thingId}/${id}/original.jpg`,original_filename:`${id}.jpg`,mime_type:'image/jpeg',width:100,height:100,file_size_bytes:1000,content_hash:id,uploaded_at:uploadedAt,taken_at:takenAt,orientation:null,exif_available:Boolean(takenAt),created_at:uploadedAt,image_url:`https://example.test/${id}?token=private`,location_saved:false};
+  return {id,thing_id:thingId,uploaded_by:'member-a',storage_path:`${thingId}/${id}/original.jpg`,original_filename:`${id}.jpg`,mime_type:'image/jpeg',width:100,height:100,file_size_bytes:1000,content_hash:id,uploaded_at:uploadedAt,taken_at:takenAt,location_city:null,orientation:null,exif_available:Boolean(takenAt),created_at:uploadedAt,image_url:`https://example.test/${id}?token=private`,location_saved:false};
 }
 
 test('gallery keeps only the current Thing collection',()=>{
@@ -51,11 +51,17 @@ test('viewer previous and next stay inside gallery order',()=>{
 
 test('viewer prefers taken_at and falls back explicitly to uploaded_at',()=>{
   const captured={...photo('taken','thing-1','2026-09-14T20:42:00Z','2026-10-05T10:00:00Z'),location_saved:true};
-  assert.deepEqual(thingPhotoViewerMetadata(captured,'Mariana'),{uploader:'Mariana',date:'Sep 14, 2026 · 8:42 PM',dateKind:'taken',locationSaved:true});
+  assert.deepEqual(thingPhotoViewerMetadata(captured,'Mariana'),{uploader:'Mariana',date:'Sep 14, 2026 · 8:42 PM',dateKind:'taken',locationSaved:true,locationCity:null});
   const uploaded=thingPhotoViewerMetadata(photo('uploaded','thing-1',null,'2026-10-05T10:00:00Z'),'Alex');
   assert.equal(uploaded.uploader,'Alex');
   assert.equal(uploaded.date,'uploaded Oct 5, 2026');
   assert.equal(uploaded.dateKind,'uploaded');
+});
+
+test('gallery tag combines uploader, capture time and city without exposing coordinates',async()=>{
+  const {galleryPhotoTag}=await import('../src/features/photos/model.ts');
+  const captured={...photo('city','thing-1','2026-09-15T15:50:00Z','2026-10-05T10:00:00Z'),location_city:'CDMX',location_saved:true};
+  assert.equal(galleryPhotoTag(captured,'Roh'),'Roh · 15 septiembre 2026, 15:50 · CDMX');
 });
 
 test('viewer input cannot navigate into another Thing',()=>{

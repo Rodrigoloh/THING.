@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { maxThingPhotoBytes, thingPhotoBucket, thingPhotoExtension, validateThingPhotoFile, type ThingPhotoUploadResult } from './model';
 import { extractThingPhotoMetadata } from './metadata';
+import { reverseGeocodePhotoCity } from './geocode';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -29,15 +30,24 @@ export async function uploadThingPhoto(thingId: string, formData: FormData): Pro
     const client = await getSupabaseServerClient();
     const { data: { user }, error: authError } = await client.auth.getUser();
     if (authError || !user) return { ok: false, error: 'not_member' };
+    const locationCity = metadata.latitude !== null && metadata.longitude !== null
+      ? await reverseGeocodePhotoCity(metadata.latitude, metadata.longitude)
+      : null;
     const photoId = randomUUID();
     const storagePath = `${thingId}/${photoId}/original.${extension}`;
-    const { error: rowError } = await client.from('thing_photos').insert({
+    const photoRow = {
       id: photoId, thing_id: thingId, uploaded_by: user.id, storage_path: storagePath,
       original_filename: originalFilename || null, mime_type: file.type, file_size_bytes: file.size,
       content_hash: contentHash, width:metadata.width, height:metadata.height,
       taken_at:metadata.takenAt, latitude:metadata.latitude, longitude:metadata.longitude,
-      orientation:metadata.orientation, exif_available:metadata.exifAvailable,
-    });
+      location_city:locationCity, orientation:metadata.orientation, exif_available:metadata.exifAvailable,
+    };
+    let { error: rowError } = await client.from('thing_photos').insert(photoRow);
+    if (rowError?.code === 'PGRST204' && /location_city/i.test(rowError.message)) {
+      const { location_city: ignoredLocationCity, ...legacyRow } = photoRow;
+      void ignoredLocationCity;
+      ({ error: rowError } = await client.from('thing_photos').insert(legacyRow));
+    }
     if (rowError) {
       if (rowError.code === '23505' && (rowError.message.includes('content_hash') || rowError.message.includes('thing_photos_thing_content_hash_unique'))) return { ok: false, error: 'duplicate' };
       if (rowError.code === '42501') return { ok: false, error: 'not_member' };
