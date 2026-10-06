@@ -6,7 +6,7 @@ export const thingPhotoMimeTypes = ['image/jpeg', 'image/png', 'image/webp'] as 
 export type ThingPhotoFileError = 'invalid_type' | 'too_large' | 'invalid_data' | 'too_many_files' | 'duplicate_selection';
 export type PreparedThingPhoto = { file: File; contentHash: string };
 export type RejectedThingPhoto = { file: File; error: ThingPhotoFileError };
-export type ThingPhotoUploadError = 'duplicate' | 'invalid_file' | 'not_member' | 'upload_failed' | 'connection_failed';
+export type ThingPhotoUploadError = 'duplicate' | 'invalid_file' | 'not_member' | 'setup_required' | 'storage_limit' | 'upload_failed' | 'connection_failed';
 export type ThingPhotoUploadResult = { ok: true; photoId: string } | { ok: false; error: ThingPhotoUploadError };
 export type ThingPhotoDownloadResult = { ok: true; url: string; filename: string; expiresAt: string } | { ok: false; error: 'download_unavailable' };
 

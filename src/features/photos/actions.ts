@@ -41,11 +41,18 @@ export async function uploadThingPhoto(thingId: string, formData: FormData): Pro
     if (rowError) {
       if (rowError.code === '23505' && (rowError.message.includes('content_hash') || rowError.message.includes('thing_photos_thing_content_hash_unique'))) return { ok: false, error: 'duplicate' };
       if (rowError.code === '42501') return { ok: false, error: 'not_member' };
+      if (rowError.code === 'PGRST205' || rowError.code === 'PGRST204' || rowError.code === '42P01' || /thing_photos|orientation/i.test(rowError.message)) {
+        console.error('Thing photo schema is unavailable', { code: rowError.code });
+        return { ok: false, error: 'setup_required' };
+      }
+      console.error('Thing photo row insert failed', { code: rowError.code });
       return { ok: false, error: 'upload_failed' };
     }
     const { error: uploadError } = await client.storage.from(thingPhotoBucket).upload(storagePath, bytes, { contentType: file.type, upsert: false });
     if (uploadError) {
       await client.from('thing_photos').delete().eq('id',photoId);
+      if (/size|limit|large|maximum|exceed/i.test(uploadError.message)) return { ok: false, error: 'storage_limit' };
+      console.error('Thing photo storage upload failed', { name: uploadError.name });
       return { ok: false, error: 'upload_failed' };
     }
     revalidatePath(`/thing/${thingId}/moments`);

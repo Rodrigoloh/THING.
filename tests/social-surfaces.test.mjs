@@ -41,6 +41,9 @@ test('Moment validation checks MIME, size and signatures', async () => {
   const galleryHtml=render(MomentsScreen,{thing,moments:{ok:true,data:[]},gallery:{ok:true,data:[]},initialView:'gallery'});
   assert.match(galleryHtml,/nothing here yet/);
   assert.match(galleryHtml,/<input[^>]*accept="image\/jpeg,image\/png,image\/webp"[^>]*multiple=""/);
+  assert.match(galleryHtml,/select photos/);
+  assert.match(galleryHtml,/up to 50 photos.*20 MB each/);
+  assert.match(galleryHtml,/thing-primary-button/);
 });
 
 test('Gallery opens a private original viewer with metadata, navigation and actions',()=>{
