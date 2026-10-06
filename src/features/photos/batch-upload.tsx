@@ -84,15 +84,16 @@ export function PhotoBatchUpload({ thingId }: { thingId: string }) {
         const data = new FormData();
         data.set('photo', photo.file);
         data.set('contentHash', photo.contentHash);
-        const result = await uploadThingPhoto(thingId, data);
+        return uploadThingPhoto(thingId, data);
+      },
+      (completed, total) => setProgress({ completed, total }),
+      (photo, result) => {
         setItems((current) => current.map((item) => item.contentHash === photo.contentHash ? {
           ...item,
           status: result.ok ? 'uploaded' : result.error === 'duplicate' ? 'duplicate' : 'failed',
           error: result.ok ? undefined : result.error,
         } : item));
-        return result;
       },
-      (completed, total) => setProgress({ completed, total }),
     );
     const uploaded = results.filter((result) => result.ok).length;
     const duplicates = results.filter((result) => !result.ok && result.error === 'duplicate').length;
@@ -104,7 +105,28 @@ export function PhotoBatchUpload({ thingId }: { thingId: string }) {
   }
 
   const totalBytes = items.reduce((total, item) => total + item.file.size, 0);
+  const ready = items.filter((item) => item.status === 'ready');
   const failed = items.filter((item) => item.status === 'failed');
+  const completed = items.filter((item) => item.status === 'uploaded' || item.status === 'duplicate');
+  const errorMessages = outcome ? [...new Set(outcome.errors.map((error) => uploadErrorCopy[error]))] : [];
+
+  function resetBatch() {
+    previews.current.forEach((url) => URL.revokeObjectURL(url));
+    previews.current = [];
+    setItems([]);
+    setRejected([]);
+    setOutcome(null);
+    setProgress({ completed: 0, total: 0 });
+    if (input.current) input.current.value = '';
+  }
+
+  function keepOnlyFailed() {
+    completed.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    previews.current = failed.map((item) => item.previewUrl);
+    setItems(failed.map((item) => ({ ...item, status: 'failed' })));
+    setProgress({ completed: 0, total: 0 });
+  }
+
   return <section className="space-y-4 border-y border-dashed border-border py-5" aria-labelledby="gallery-upload-title">
     <div><p className="text-[10px] font-black uppercase tracking-[.2em] text-muted">gallery</p><h2 id="gallery-upload-title" className="font-heading text-2xl font-black">add photos together</h2></div>
     <div className="space-y-2">
@@ -125,13 +147,18 @@ export function PhotoBatchUpload({ thingId }: { thingId: string }) {
         {item.status !== 'ready' && <figcaption className="absolute inset-x-0 bottom-0 bg-black/75 px-1 py-1 text-center text-[9px] font-bold text-white">{item.status === 'duplicate' ? 'already here' : item.status}</figcaption>}
       </figure>)}</div>
       <p className="text-sm font-semibold">{items.length} {items.length === 1 ? 'photo' : 'photos'} · {formatPhotoBytes(totalBytes)}</p>
-      <button type="button" disabled={uploading} onClick={() => void upload(items.filter((item) => item.status === 'ready'))} className="thing-primary-button min-h-12 px-6 font-bold disabled:opacity-50">{uploading ? `uploading ${progress.completed} / ${progress.total}` : 'upload photos'}</button>
+      {ready.length > 0 && <button type="button" disabled={uploading} onClick={() => void upload(ready)} className="thing-primary-button min-h-12 px-6 font-bold disabled:opacity-50">{uploading ? `uploading ${progress.completed} / ${progress.total}` : 'upload photos'}</button>}
     </>}
+    {uploading && <p role="status" className="rounded-[14px] border border-border bg-surface p-3 text-center text-sm font-bold">uploading {progress.completed} / {progress.total}</p>}
     {!!rejected.length && <div role="alert" className="space-y-1 text-sm"><p className="font-bold">{rejected.length} {rejected.length === 1 ? 'file was' : 'files were'} not selected</p><ul className="text-muted">{rejected.map((item, index) => <li key={`${item.file.name}-${index}`}>{item.file.name}: {rejectionCopy[item.error]}</li>)}</ul></div>}
     {outcome && <div role="status" className="space-y-2 text-sm">
       <p><strong>{outcome.uploaded} uploaded</strong>{outcome.failed > 0 && <> · {outcome.failed} couldn&apos;t upload</>}{outcome.duplicates > 0 && <> · {outcome.duplicates} already here</>}</p>
-      {outcome.errors.map((error) => <p key={error} role="alert" className="rounded-[14px] border border-border bg-surface p-3 font-semibold">{uploadErrorCopy[error]}</p>)}
-      {failed.length > 0 && !outcome.errors.includes('setup_required') && <button type="button" disabled={uploading} onClick={() => void upload(failed)} className="min-h-11 font-bold underline decoration-2 underline-offset-4">retry failed</button>}
+      {errorMessages.map((message) => <p key={message} role="alert" className="rounded-[14px] border border-border bg-surface p-3 font-semibold">{message}</p>)}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {failed.length > 0 && !outcome.errors.includes('setup_required') && <button type="button" disabled={uploading} onClick={() => void upload(failed)} className="thing-primary-button min-h-12 rounded-[16px] px-4 font-bold disabled:opacity-50">{uploading ? `retrying ${progress.completed} / ${progress.total}` : `retry ${failed.length} failed ${failed.length === 1 ? 'photo' : 'photos'}`}</button>}
+        {failed.length > 0 && completed.length > 0 && <button type="button" disabled={uploading} onClick={keepOnlyFailed} className="min-h-12 rounded-[16px] border border-border bg-surface px-4 font-bold disabled:opacity-50">keep only failed</button>}
+        <button type="button" disabled={uploading} onClick={resetBatch} className="min-h-12 rounded-[16px] border border-border bg-surface px-4 font-bold disabled:opacity-50">clear selection</button>
+      </div>
     </div>}
   </section>;
 }

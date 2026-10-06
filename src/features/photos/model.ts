@@ -125,11 +125,15 @@ export async function uploadPreparedThingPhotos(
   photos: PreparedThingPhoto[],
   upload: (photo: PreparedThingPhoto) => Promise<ThingPhotoUploadResult>,
   onProgress?: (completed: number, total: number) => void,
+  onResult?: (photo: PreparedThingPhoto, result: ThingPhotoUploadResult) => void,
 ): Promise<ThingPhotoUploadResult[]> {
   const results: ThingPhotoUploadResult[] = [];
   for (const photo of photos) {
-    try { results.push(await upload(photo)); }
-    catch { results.push({ ok: false, error: 'connection_failed' }); }
+    let result: ThingPhotoUploadResult;
+    try { result = await upload(photo); }
+    catch { result = { ok: false, error: 'connection_failed' }; }
+    results.push(result);
+    onResult?.(photo, result);
     onProgress?.(results.length, photos.length);
   }
   return results;

@@ -22,15 +22,16 @@ test('multiple valid photos prepare and upload as one isolated batch', async () 
 
 test('one failed photo does not stop the rest of the batch', async () => {
   const prepared=(await prepareThingPhotoBatch([png('one.png',1),png('two.png',2),png('three.png',3)])).accepted;
-  const called=[];
+  const called=[], settled=[];
   const results=await uploadPreparedThingPhotos(prepared,async(photo)=>{
     called.push(photo.file.name);
-    if(photo.file.name==='two.png') return {ok:false,error:'upload_failed'};
+    if(photo.file.name==='two.png') throw new Error('connection dropped');
     return {ok:true,photoId:photo.file.name};
-  });
+  },undefined,(photo,result)=>settled.push([photo.file.name,result.ok?'uploaded':result.error]));
   assert.deepEqual(called,['one.png','two.png','three.png']);
   assert.equal(results.filter((result)=>result.ok).length,2);
   assert.equal(results.filter((result)=>!result.ok).length,1);
+  assert.deepEqual(settled,[['one.png','uploaded'],['two.png','connection_failed'],['three.png','uploaded']]);
 });
 
 test('invalid MIME, over 20 MiB and over 50 files are rejected before upload', async () => {
